@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - run: go vet ./...
+      - run: go test ./...
+      - name: Cross-compile
+        run: |
+          for target in windows/amd64 darwin/arm64 linux/arm64; do
+            GOOS=${target%/*} GOARCH=${target#*/} go build -o /dev/null ./cmd/fbrescue
+          done
+
+  corpus:
+    # Tests against databases created by real Firebird 2.5, 3.0, 4.0 and 5.0.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Install libraries needed by the Firebird release builds
+        run: sudo apt-get update && sudo apt-get install -y libtommath1 libncurses6
+      - uses: actions/cache@v6
+        with:
+          path: ~/.cache/fbrescue/firebird
+          key: firebird-${{ hashFiles('tools/mkcorpus/mkcorpus.sh') }}
+      - run: tools/mkcorpus/mkcorpus.sh corpus
+      - run: go test -v ./...
+        env:
+          FBRESCUE_CORPUS: ${{ github.workspace }}/corpus
