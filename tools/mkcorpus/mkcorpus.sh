@@ -53,9 +53,12 @@ fb() {
     "$root/bin/$tool" "$@"
 }
 
-create_db() { # create_db <version> <path> <dialect>
-  echo "create database '$2' page_size 8192; quit;" | fb "$1" isql -q -sql_dialect "$3"
+create_db() { # create_db <version> <path> <dialect> [page size] [extra clause]
+  echo "create database '$2' page_size ${4:-8192} ${5:-}; quit;" | fb "$1" isql -q -sql_dialect "$3"
 }
+
+# patch <file> <offset> <hex bytes> writes bytes into a file in place.
+patch() { printf "$(sed 's/\([0-9a-f][0-9a-f]\)/\\x\1/g' <<<"$3")" | dd of="$1" bs=1 seek=$(($2)) conv=notrunc status=none; }
 
 compat_libs
 for v in 25 30 40 50; do
@@ -73,7 +76,37 @@ for v in 25 30 40 50; do
   cp "$d/base.fdb" "$d/async.fdb";    fb "$v" gfix -write async "$d/async.fdb"
   cp "$d/base.fdb" "$d/readonly.fdb"; fb "$v" gfix -mode read_only "$d/readonly.fdb"
   cp "$d/base.fdb" "$d/shutdown.fdb"; fb "$v" gfix -shut single -force 0 "$d/shutdown.fdb"
+  cp "$d/base.fdb" "$d/shutmulti.fdb"; fb "$v" gfix -shut multi -force 0 "$d/shutmulti.fdb"
+  cp "$d/base.fdb" "$d/shutfull.fdb"; fb "$v" gfix -shut full -force 0 "$d/shutfull.fdb"
+  cp "$d/base.fdb" "$d/noreserve.fdb"; fb "$v" gfix -use full "$d/noreserve.fdb"
   create_db "$v" "$d/dialect1.fdb" 1
+  if [[ $v == 40 || $v == 50 ]]; then
+    cp "$d/base.fdb" "$d/replica_ro.fdb"; fb "$v" gfix -replica read_only "$d/replica_ro.fdb"
+    cp "$d/base.fdb" "$d/replica_rw.fdb"; fb "$v" gfix -replica read_write "$d/replica_rw.fdb"
+  fi
+
+  # High 16 bits of the transaction numbers (next, OIT, OAT, OST = 1, 2, 3, 4)
+  # and of the attachment id (5); ODS 12+ only. gstat reads them back.
+  case $v in
+    30) cp "$d/base.fdb" "$d/hiwords.fdb"; patch "$d/hiwords.fdb" 0x78 050000000100020003000400 ;;
+    40|50) cp "$d/base.fdb" "$d/hiwords.fdb"; patch "$d/hiwords.fdb" 0x74 050000000100020003000400 ;;
+  esac
+
+  # Over 16 304 transactions on 4K pages: three TIP pages.
+  create_db "$v" "$d/manytx.fdb" 3 4096
+  fb "$v" isql -q "$d/manytx.fdb" -i <(echo "create table c (i integer); commit;"
+    for i in $(seq 17000); do echo "insert into c values ($i); commit;"; done) > /dev/null
+
+  # A secondary file holding logical pages from 300 on.
+  create_db "$v" "$d/multifile.fdb" 3 4096 "file '$d/multifile.f2' starting at page 300"
+  fb "$v" isql -q "$d/multifile.fdb" -i "$SQL/multifile.sql"
+
+  # Larger than one PIP range on 4K pages (32 608 / 32 544 pages), with
+  # dozens of pointer pages. ~140 MB, so one engine per page layout family.
+  if [[ $v == 25 || $v == 50 ]]; then
+    create_db "$v" "$d/big.fdb" 3 4096
+    fb "$v" isql -q "$d/big.fdb" -i "$SQL/big.sql"
+  fi
 
   # nbackup lock with a committed row that lives only in nblock.fdb.delta.
   cp "$d/base.fdb" "$d/nblock.fdb"
@@ -82,6 +115,10 @@ for v in 25 30 40 50; do
     fb "$v" isql -q "$d/nblock.fdb"
 
   for db in "$d"/*.fdb; do
+    # gstat -r attaches to the database, which bumps the transaction and
+    # attachment counters, so the header is read last. -r is not available
+    # for databases in full shutdown.
+    fb "$v" gstat -d -r -s "$db" > "${db%.fdb}.gstat-r.txt" 2>/dev/null || rm "${db%.fdb}.gstat-r.txt"
     fb "$v" gstat -h "$db" > "${db%.fdb}.gstat.txt"
   done
   echo "fb$v: $(ls "$d"/*.fdb | wc -l) databases" >&2
