@@ -79,6 +79,7 @@ const (
 
 type dataPage struct {
 	isData, referenced         bool
+	unlisted                   bool // page flag dpg_orphan: deliberately not in a pointer page
 	rel                        uint16
 	seq                        uint32
 	records, deleted, versions uint16
@@ -204,7 +205,9 @@ func (s *scanner) used(p uint32, b []byte) bool {
 }
 
 func (s *scanner) dataPage(p uint32, b []byte) {
-	d := dataPage{isData: true, seq: le.Uint32(b[0x10:]), rel: le.Uint16(b[0x14:])}
+	// Pages holding only fragments of records larger than a page carry the
+	// flag 0x01 and are not listed in the table's pointer pages.
+	d := dataPage{isData: true, seq: le.Uint32(b[0x10:]), rel: le.Uint16(b[0x14:]), unlisted: b[1]&0x01 != 0}
 	n := int(le.Uint16(b[0x16:]))
 	if 0x18+4*n > len(b) {
 		s.problem(p, BadSlots, "data page claims %d slots, more than fit in the page", n)
@@ -283,7 +286,7 @@ func (s *scanner) link() {
 		s.r.Relations = append(s.r.Relations, r)
 	}
 	for p := range s.data {
-		if d := s.data[p]; d.isData && !d.referenced {
+		if d := s.data[p]; d.isData && !d.referenced && !d.unlisted {
 			s.problem(uint32(p), OrphanDataPage, "data page of table %d is not referenced by any pointer page", d.rel)
 		}
 	}

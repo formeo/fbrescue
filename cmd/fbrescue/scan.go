@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/formeo/fbrescue/internal/fdb"
+	"github.com/formeo/fbrescue/internal/meta"
 	"github.com/formeo/fbrescue/internal/scan"
 )
 
@@ -58,17 +59,29 @@ func runScan(path string, asJSON bool, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stdout, "Transactions  unknown (header page or transaction inventory damaged)")
 	}
 
+	// Names come from the system tables; on a database too damaged for
+	// that, the relation ids are shown instead.
+	names := map[uint16]string{}
+	if cat, err := meta.Load(db); err == nil {
+		for _, t := range cat.Tables {
+			names[t.ID] = t.Name
+		}
+	}
 	var system, systemRecords int
-	fmt.Fprintf(stdout, "\n%-8s %13s %10s %10s %9s %9s\n", "Table", "Pointer pages", "Data pages", "Records", "Deleted", "Versions")
+	fmt.Fprintf(stdout, "\n%-24s %13s %10s %10s %9s %9s\n", "Table", "Pointer pages", "Data pages", "Records", "Deleted", "Versions")
 	for _, rel := range r.Relations {
 		if rel.ID < 128 { // system tables
 			system++
 			systemRecords += rel.Records
 			continue
 		}
-		fmt.Fprintf(stdout, "%-8d %13d %10d %10d %9d %9d\n", rel.ID, rel.PointerPages, rel.DataPages, rel.Records, rel.Deleted, rel.Versions)
+		name := names[rel.ID]
+		if name == "" {
+			name = fmt.Sprintf("#%d", rel.ID)
+		}
+		fmt.Fprintf(stdout, "%-24s %13d %10d %10d %9d %9d\n", name, rel.PointerPages, rel.DataPages, rel.Records, rel.Deleted, rel.Versions)
 	}
-	fmt.Fprintf(stdout, "(%d system tables, %d records; table names arrive in v0.2)\n\n", system, systemRecords)
+	fmt.Fprintf(stdout, "(%d system tables, %d records)\n\n", system, systemRecords)
 
 	for _, w := range warns {
 		fmt.Fprintf(stdout, "⚠ %s\n", w)

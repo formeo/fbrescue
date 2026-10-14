@@ -19,6 +19,7 @@ type Header struct {
 	NextTx         uint64 // number of the last started transaction
 	NextAttachment uint64
 	PageBuffers    uint32
+	PagesPointer   uint32    // first pointer page of RDB$PAGES, the list of all pointer and TIP pages
 	Created        time.Time // UTC for ODS 13, server local time before
 	Continuation   string    // next file of a multi-file database, "" if none
 	LastPage       uint32    // last logical page in this file, if Continuation is set
@@ -92,6 +93,7 @@ func parseHeader(b []byte) (*Header, error) {
 		OST:            uint64(le.Uint32(b[l.ost:])),
 		NextAttachment: uint64(le.Uint32(b[0x34:])),
 		PageBuffers:    le.Uint32(b[0x44:]),
+		PagesPointer:   le.Uint32(b[0x14:]),
 		Created:        decodeTimestamp(le.Uint32(b[0x2C:]), le.Uint32(b[0x30:])),
 	}
 	if l.traHigh >= 0 {

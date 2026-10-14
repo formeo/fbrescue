@@ -16,24 +16,30 @@ const usage = `fbrescue - read-only data recovery for Firebird 2.5-5.0 databases
 The source database file is never modified.
 
 Usage:
-  fbrescue <command> [--json] <db>
+  fbrescue <command> [options] <db>
 
 Commands:
   info    <db>                header, ODS version, flags, warnings
   scan    <db>                page map, damage, per-table summary
+  tables  <db>                schema of the user tables (CREATE TABLE)
+  export  <db> --out <dir>    export the user tables
+
+Options:
+  --json                      machine-readable output (info, scan, tables, export summary)
+  --format csv|sql|jsonl      export: file format (default csv)
+  --table NAME                export: only this table; repeat for more
+  --charset NAME              export: decode CHARACTER SET NONE text as NAME, e.g. WIN1251
 
 Planned:
-  tables  <db>                recovered schema (DDL)
-  export  <db> --out <dir>    export data as csv, sql or jsonl
   page    <db> <N>            decode a single page
   report  <db>                anonymized diagnostic report for bug reports
 
   version                     print the version
 
-Exit status: 0 ok, 1 error, 2 the database has problems (scan).
+Exit status: 0 ok, 1 error, 2 problems found (scan) or data left out (export).
 `
 
-var planned = map[string]bool{"tables": true, "export": true, "page": true, "report": true}
+var planned = map[string]bool{"page": true, "report": true}
 
 func main() {
 	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
@@ -52,16 +58,21 @@ func run(args []string, stdout, stderr io.Writer) int {
 	case cmd == "version":
 		fmt.Fprintln(stdout, "fbrescue", version)
 		return 0
-	case cmd == "info" || cmd == "scan":
-		path, asJSON, err := parseArgs(rest)
+	case cmd == "info" || cmd == "scan" || cmd == "tables" || cmd == "export":
+		a, err := parseArgs(cmd, rest)
 		if err != nil {
 			fmt.Fprintf(stderr, "fbrescue %s: %v\n", cmd, err)
 			return 1
 		}
-		if cmd == "info" {
-			return runInfo(path, asJSON, stdout, stderr)
+		switch cmd {
+		case "info":
+			return runInfo(a.path, a.json, stdout, stderr)
+		case "scan":
+			return runScan(a.path, a.json, stdout, stderr)
+		case "tables":
+			return runTables(a, stdout, stderr)
 		}
-		return runScan(path, asJSON, stdout, stderr)
+		return runExport(a, stdout, stderr)
 	case planned[cmd]:
 		fmt.Fprintf(stderr, "fbrescue %s: not implemented yet\n", cmd)
 		return 1
@@ -71,24 +82,62 @@ func run(args []string, stdout, stderr io.Writer) int {
 	}
 }
 
-// parseArgs accepts exactly one database path and an optional --json
-// anywhere on the line.
-func parseArgs(args []string) (path string, asJSON bool, err error) {
+type cliArgs struct {
+	path    string
+	json    bool
+	out     string
+	format  string
+	charset string
+	tables  []string
+}
+
+// parseArgs accepts one database path and options anywhere on the line,
+// as --name value or --name=value.
+func parseArgs(cmd string, in []string) (cliArgs, error) {
+	a := cliArgs{format: "csv"}
+	valued := map[string]*string{"out": &a.out, "format": &a.format, "charset": &a.charset, "table": nil}
 	var paths []string
-	for _, a := range args {
-		switch {
-		case a == "--json" || a == "-json":
-			asJSON = true
-		case strings.HasPrefix(a, "-") && a != "-":
-			return "", false, fmt.Errorf("unknown option %s", a)
-		default:
-			paths = append(paths, a)
+	for i := 0; i < len(in); i++ {
+		arg := in[i]
+		if !strings.HasPrefix(arg, "-") || arg == "-" {
+			paths = append(paths, arg)
+			continue
+		}
+		name, val, hasVal := strings.Cut(strings.TrimLeft(arg, "-"), "=")
+		if name == "json" && !hasVal {
+			a.json = true
+			continue
+		}
+		dst, ok := valued[name]
+		if !ok || cmd != "export" {
+			return a, fmt.Errorf("unknown option %s", arg)
+		}
+		if !hasVal {
+			if i+1 >= len(in) {
+				return a, fmt.Errorf("option %s needs a value", arg)
+			}
+			i++
+			val = in[i]
+		}
+		if dst == nil {
+			a.tables = append(a.tables, val)
+		} else {
+			*dst = val
 		}
 	}
 	if len(paths) != 1 {
-		return "", false, fmt.Errorf("expected one database file, got %d arguments", len(paths))
+		return a, fmt.Errorf("expected one database file, got %d arguments", len(paths))
 	}
-	return paths[0], asJSON, nil
+	a.path = paths[0]
+	if cmd == "export" {
+		if a.out == "" {
+			return a, fmt.Errorf("--out <directory> is required")
+		}
+		if a.format != "csv" && a.format != "sql" && a.format != "jsonl" {
+			return a, fmt.Errorf("unknown format %q: use csv, sql or jsonl", a.format)
+		}
+	}
+	return a, nil
 }
 
 func writeJSON(w io.Writer, v any) {

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Builds the test corpus: databases created by real Firebird engines
-# (2.5, 3.0, 4.0, 5.0) in embedded mode, with `gstat -h` output for each
-# as the reference.
+# (2.5, 3.0, 4.0, 5.0) in embedded mode, with `gstat -h` and `gstat -r`
+# output for each as references. Tests also run the engines through fb.sh.
 #
 # Usage: tools/mkcorpus/mkcorpus.sh [output-dir]   (default: corpus)
 # Linux x86-64 only. Needs curl, tar and the libraries libtommath.so.1,
@@ -44,14 +44,7 @@ install_fb() {
 }
 
 # fb <version> <tool> [args...] runs a Firebird tool in embedded mode.
-fb() {
-  local v=$1 tool=$2; shift 2
-  local root=$CACHE/$v/opt/firebird
-  mkdir -p "$CACHE/lock$v" "$CACHE/tmp$v"
-  FIREBIRD=$root FIREBIRD_LOCK=$CACHE/lock$v FIREBIRD_TMP=$CACHE/tmp$v \
-  LD_LIBRARY_PATH=$root/lib:$CACHE/compat ISC_USER=SYSDBA ISC_PASSWORD=masterkey \
-    "$root/bin/$tool" "$@"
-}
+fb() { FB_CACHE=$CACHE "$(dirname "$0")/fb.sh" "$@"; }
 
 create_db() { # create_db <version> <path> <dialect> [page size] [extra clause]
   echo "create database '$2' page_size ${4:-8192} ${5:-}; quit;" | fb "$1" isql -q -sql_dialect "$3"
@@ -107,6 +100,24 @@ for v in 25 30 40 50; do
     create_db "$v" "$d/big.fdb" 3 4096
     fb "$v" isql -q "$d/big.fdb" -i "$SQL/big.sql"
   fi
+
+  # Every type export handles, in a UTF8 database.
+  create_db "$v" "$d/types.fdb" 3 8192 "default character set utf8"
+  fb "$v" isql -q -ch UTF8 "$d/types.fdb" -i "$SQL/types.sql"
+  [[ $v == 25 ]] || fb "$v" isql -q -ch UTF8 "$d/types.fdb" -i "$SQL/boolean.sql"
+
+  # Record layouts: format changes, long runs, fragments, rolled-back
+  # changes, blobs on many pages, a descriptor larger than a page, and
+  # WIN1251 bytes ("Привет") in a CHARACTER SET NONE column.
+  # Nothing may read these tables through the engine afterwards: that would
+  # garbage-collect the rolled-back versions.
+  create_db "$v" "$d/layout.fdb" 3 4096
+  fb "$v" gfix -housekeeping 0 "$d/layout.fdb"
+  fb "$v" isql -q "$d/layout.fdb" -i "$SQL/layout.sql"
+  echo "create table wide ($(seq -f 'c%g smallint' -s, 1 700)); commit;
+    insert into wide (c1, c350, c700) values (1, 350, 700); commit; quit;" | fb "$v" isql -q "$d/layout.fdb"
+  echo "create table cs (id integer not null, n varchar(20) character set none); commit;
+    insert into cs values (1, x'CFF0E8E2E5F2'); commit; quit;" | fb "$v" isql -q "$d/layout.fdb"
 
   # nbackup lock with a committed row that lives only in nblock.fdb.delta.
   cp "$d/base.fdb" "$d/nblock.fdb"

@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/formeo/fbrescue/internal/corpus"
 )
@@ -38,7 +39,10 @@ func TestHeaderMatchesGstat(t *testing.T) {
 			check("Next attachment ID", fmt.Sprint(h.NextAttachment))
 			check("Page buffers", fmt.Sprint(h.PageBuffers))
 			check("Database dialect", fmt.Sprint(h.Dialect()))
-			check("Creation date", h.Created.Format("Jan 2, 2006 15:04:05"))
+			// gstat prints the hour without a leading zero: compare as times.
+			if want, err := time.Parse("Jan 2, 2006 15:04:05", db.Gstat("Creation date")); err != nil || !h.Created.Truncate(time.Second).Equal(want) {
+				t.Errorf("Creation date = %v, gstat says %q (%v)", h.Created, db.Gstat("Creation date"), err)
+			}
 
 			names, unknown := h.Attributes()
 			want := strings.Split(db.Gstat("Attributes"), ", ")
