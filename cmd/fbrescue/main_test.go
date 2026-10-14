@@ -44,9 +44,14 @@ func TestNeverWrites(t *testing.T) {
 				sums[dst] = sha256.Sum256(b)
 			}
 
-			for _, args := range [][]string{{"info", path}, {"info", "--json", path}, {"scan", path}, {"scan", "--json", path}} {
+			out := t.TempDir()
+			for _, args := range [][]string{{"info", path}, {"info", "--json", path}, {"scan", path}, {"scan", "--json", path},
+				{"tables", path}, {"export", "--format", "sql", "--out", out, path}} {
 				var out, errOut bytes.Buffer
-				if code := run(args, &out, &errOut); code == 1 {
+				code := run(args, &out, &errOut)
+				// tables and export need an intact header and system tables:
+				// the hiwords header claims transactions the inventory lacks.
+				if code == 1 && !(db.Name == "hiwords" && (args[0] == "tables" || args[0] == "export")) {
 					t.Errorf("%v: exit 1: %s", args, errOut.String())
 				}
 			}
