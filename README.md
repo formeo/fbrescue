@@ -4,7 +4,7 @@ Read-only data recovery for Firebird 2.5–5.0 databases.
 
 `fbrescue` reads `.fdb` / `.gdb` files directly, without the Firebird engine, and gets data out of databases that `gbak` cannot back up. **It never modifies the source file.**
 
-> **Status: v0.2.** `info` and `scan` analyze a database; `tables` and `export` get the schema and the data of intact databases out without the engine. Not exported yet: BLOB columns, Firebird 4 types (INT128, DECFLOAT, WITH TIME ZONE), and rows whose current version belongs to a transaction that did not commit — each is reported, never silently dropped. Damaged databases are the subject of v0.4; for real recoveries try `gfix` and `gbak` first.
+> **Status: v0.3.** `info` and `scan` analyze a database; `tables` and `export` get the schema and the data of intact databases out without the engine, including BLOBs, Firebird 4 types and the committed version of rows changed by transactions that did not commit; `page` shows a single page. Not exported yet: arrays and records with 48-bit transaction numbers — reported, never silently dropped. Damaged databases are the subject of v0.4; for real recoveries try `gfix` and `gbak` first.
 
 ## Usage
 
@@ -41,13 +41,15 @@ Wrote rescued: schema.sql and 2 sql files
 | `info <db>` | header, ODS version, flags, warnings (nbackup lock, damaged header, truncated file) |
 | `scan <db>` | page map, damage, per-table summary. Exit status 2 when it finds problems: pages holding another page's contents, pages in use with an invalid type, broken pointer page chains, data pages no table references, missing transaction inventory pages, truncated files |
 | `tables <db>` | `CREATE TABLE` statements for the user tables, from the stored record formats |
-| `export <db> --out <dir>` | the rows of every user table, plus `schema.sql`. `--format csv` (default), `sql` (INSERTs for isql) or `jsonl`; `--table NAME` to pick tables; `--charset WIN1251` to decode text stored in CHARACTER SET NONE. Exit status 2 when something was left out: the reasons are printed, and rows that could not be read are listed in `_errors.jsonl` |
-| `page <db> <N>` | planned: decode a single page |
+| `export <db> --out <dir>` | the rows of every user table, plus `schema.sql`. `--format csv` (default), `sql` (INSERTs for isql) or `jsonl`; `--table NAME` to pick tables; `--charset WIN1251` to decode text stored in CHARACTER SET NONE; `--include-deleted` to also write deleted rows whose old version is still on disk to `<table>.deleted.<format>`. Exit status 2 when something was left out: the reasons are printed, and rows that could not be read are listed in `_errors.jsonl` |
+| `page <db> <N>` | one page decoded: type and header fields; for data pages every record with its flags, transaction state, version chain and values; pointer pages list their data pages |
 | `report <db>` | planned: anonymized diagnostic report for bug reports |
 
 All commands take `--json`. A single static binary for Windows, Linux and macOS: no fbclient, no cgo. Multi-file databases are supported: secondary files are looked up next to the main file first. A damaged header page is not fatal for `info` and `scan`: the page size is detected from the other pages.
 
-What export handles: every column type up to Firebird 3 except BLOB and arrays; text in UTF8, UNICODE_FSS and the single-byte character sets (WIN125x, KOI8R/U, ISO8859_x, DOSxxx; not CYRL and NEXT); tables altered many times (each row is read with the format it was written with, columns added later get the default the engine would show); records larger than a page; the record encodings of Firebird 2.5 to 5.0. CSV keeps NULL (empty field) apart from an empty string (`""`). In tests a 140 MB database exports to CSV in under a second.
+What export handles: every column type of Firebird 2.5–5.0 except arrays — BLOBs of every level, segmented and stream; INT128, DECFLOAT, TIME/TIMESTAMP WITH TIME ZONE with region zones; text in UTF8, UNICODE_FSS and the single-byte character sets (WIN125x, KOI8R/U, ISO8859_x, DOSxxx; not CYRL and NEXT); tables altered many times (each row is read with the format it was written with, columns added later get the default the engine would show); records larger than a page; the record encodings of Firebird 2.5 to 5.0. CSV keeps NULL (empty field) apart from an empty string (`""`). Each row is exported as SELECT would see it after all transactions finished: the newest committed version, read through the chain of older versions, including versions stored as differences. In tests a 140 MB database exports to CSV in under a second.
+
+BLOBs in SQL exports: values up to 1 MB are written inline as joined literals; larger ones go to `<table>.blobs/<row>.<column>.txt|bin`, with NULL and a comment naming the file in the INSERT. CSV and JSON Lines always hold the whole value. Firebird 2.5's isql reads statements of at most 64 KB, so SQL files with large inline values load only with isql 3.0 or later.
 
 ## Roadmap
 
@@ -61,7 +63,7 @@ What export handles: every column type up to Firebird 3 except BLOB and arrays; 
 
 ## How correctness is checked
 
-Every assumption about the on-disk format is tested against databases created by real Firebird engines; [docs/format.md](docs/format.md) lists each one and how it was verified. `tools/mkcorpus/mkcorpus.sh` downloads Firebird 2.5, 3.0, 4.0 and 5.0 and creates 65 test databases in embedded mode: plain data, deleted rows, each header flag fbrescue names, multi-file, three TIP pages, more than one page inventory range, every exported column type with edge values, tables altered seven times, records larger than a page, rolled-back changes left on disk. Each engine's own `gstat -h` and `gstat -d -r -s` output is saved as the reference.
+Every assumption about the on-disk format is tested against databases created by real Firebird engines; [docs/format.md](docs/format.md) lists each one and how it was verified. `tools/mkcorpus/mkcorpus.sh` downloads Firebird 2.5, 3.0, 4.0 and 5.0 and creates 75 test databases in embedded mode: plain data, deleted rows, each header flag fbrescue names, multi-file, three TIP pages, more than one page inventory range, every exported column type with edge values, tables altered seven times, records larger than a page, rolled-back changes and record versions left on disk, BLOBs of every level, Firebird 4 types with edge values. Each engine's own `gstat -h` and `gstat -d -r -s` output is saved as the reference.
 
 The main export test is a round trip through the engine: the SQL export is loaded into a new database by the same Firebird version, and `SELECT` on it must print exactly what `SELECT` on the original prints — every value of every row, in the engine's own formatting. CI runs all tests against the corpus, including damaged copies (zeroed, misplaced and truncated pages, broken chains) and a check that no command ever changes the database file.
 

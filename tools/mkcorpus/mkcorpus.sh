@@ -119,6 +119,24 @@ for v in 25 30 40 50; do
   echo "create table cs (id integer not null, n varchar(20) character set none); commit;
     insert into cs values (1, x'CFF0E8E2E5F2'); commit; quit;" | fb "$v" isql -q "$d/layout.fdb"
 
+  # Record version chains: committed and rolled-back updates and deletes.
+  # Housekeeping off, and nothing may read the table through the engine.
+  create_db "$v" "$d/versions.fdb" 3 4096 "default character set utf8"
+  fb "$v" gfix -housekeeping 0 "$d/versions.fdb"
+  fb "$v" isql -q -ch UTF8 "$d/versions.fdb" -i "$SQL/versions.sql"
+
+  # Blobs of every level (a level-2 one of 8 MB), text and binary, and on
+  # Firebird 5 stream blobs.
+  create_db "$v" "$d/blobs.fdb" 3 4096 "default character set utf8"
+  fb "$v" isql -q -ch UTF8 "$d/blobs.fdb" -i "$SQL/blobs.sql"
+  [[ $v != 50 ]] || fb "$v" isql -q -ch UTF8 "$d/blobs.fdb" -i "$SQL/blobs5.sql"
+
+  # Types added in Firebird 4.
+  if [[ $v == 40 || $v == 50 ]]; then
+    create_db "$v" "$d/fb4types.fdb" 3 8192 "default character set utf8"
+    fb "$v" isql -q -ch UTF8 "$d/fb4types.fdb" -i "$SQL/fb4types.sql"
+  fi
+
   # nbackup lock with a committed row that lives only in nblock.fdb.delta.
   cp "$d/base.fdb" "$d/nblock.fdb"
   fb "$v" nbackup -L "$d/nblock.fdb"

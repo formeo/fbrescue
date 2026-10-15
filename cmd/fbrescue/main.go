@@ -29,9 +29,11 @@ Options:
   --format csv|sql|jsonl      export: file format (default csv)
   --table NAME                export: only this table; repeat for more
   --charset NAME              export: decode CHARACTER SET NONE text as NAME, e.g. WIN1251
+  --include-deleted           export: also write deleted rows still on disk, to <table>.deleted.<format>
+
+  page    <db> <N>            decode one page: header, pointer slots, records and their values
 
 Planned:
-  page    <db> <N>            decode a single page
   report  <db>                anonymized diagnostic report for bug reports
 
   version                     print the version
@@ -39,7 +41,7 @@ Planned:
 Exit status: 0 ok, 1 error, 2 problems found (scan) or data left out (export).
 `
 
-var planned = map[string]bool{"page": true, "report": true}
+var planned = map[string]bool{"report": true}
 
 func main() {
 	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
@@ -58,7 +60,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	case cmd == "version":
 		fmt.Fprintln(stdout, "fbrescue", version)
 		return 0
-	case cmd == "info" || cmd == "scan" || cmd == "tables" || cmd == "export":
+	case cmd == "info" || cmd == "scan" || cmd == "tables" || cmd == "export" || cmd == "page":
 		a, err := parseArgs(cmd, rest)
 		if err != nil {
 			fmt.Fprintf(stderr, "fbrescue %s: %v\n", cmd, err)
@@ -71,6 +73,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 			return runScan(a.path, a.json, stdout, stderr)
 		case "tables":
 			return runTables(a, stdout, stderr)
+		case "page":
+			return runPage(a, stdout, stderr)
 		}
 		return runExport(a, stdout, stderr)
 	case planned[cmd]:
@@ -83,12 +87,14 @@ func run(args []string, stdout, stderr io.Writer) int {
 }
 
 type cliArgs struct {
-	path    string
-	json    bool
-	out     string
-	format  string
-	charset string
-	tables  []string
+	path           string
+	json           bool
+	includeDeleted bool
+	out            string
+	format         string
+	charset        string
+	tables         []string
+	pageNo         string // page: the page number
 }
 
 // parseArgs accepts one database path and options anywhere on the line,
@@ -108,6 +114,10 @@ func parseArgs(cmd string, in []string) (cliArgs, error) {
 			a.json = true
 			continue
 		}
+		if name == "include-deleted" && !hasVal && cmd == "export" {
+			a.includeDeleted = true
+			continue
+		}
 		dst, ok := valued[name]
 		if !ok || cmd != "export" {
 			return a, fmt.Errorf("unknown option %s", arg)
@@ -124,6 +134,12 @@ func parseArgs(cmd string, in []string) (cliArgs, error) {
 		} else {
 			*dst = val
 		}
+	}
+	if cmd == "page" {
+		if len(paths) != 2 {
+			return a, fmt.Errorf("expected a database file and a page number")
+		}
+		a.pageNo, paths = paths[1], paths[:1]
 	}
 	if len(paths) != 1 {
 		return a, fmt.Errorf("expected one database file, got %d arguments", len(paths))

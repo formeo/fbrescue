@@ -149,6 +149,9 @@ func (f Field) SQLType() string {
 	case TypeVarying:
 		return fmt.Sprintf("VARCHAR(%d)%s", f.CharLength(), cs())
 	case TypeBlob:
+		if f.SubType == 1 {
+			return "BLOB SUB_TYPE TEXT CHARACTER SET " + CharsetName(int(uint8(f.Scale)))
+		}
 		return fmt.Sprintf("BLOB SUB_TYPE %d", f.SubType)
 	case TypeInt128:
 		return num(38, "INT128")

@@ -73,7 +73,7 @@ func runTables(a cliArgs, stdout, stderr io.Writer) int {
 }
 
 func runExport(a cliArgs, stdout, stderr io.Writer) int {
-	opt := export.Options{Format: a.format, Dir: a.out, Tables: a.tables}
+	opt := export.Options{Format: a.format, Dir: a.out, Tables: a.tables, IncludeDeleted: a.includeDeleted}
 	if a.charset != "" {
 		id, ok := value.CharsetByName(a.charset)
 		if !ok || !value.Decodable(id) {
@@ -102,6 +102,9 @@ func runExport(a cliArgs, stdout, stderr io.Writer) int {
 		}
 		if len(t.Omitted) > 0 {
 			fmt.Fprintf(stdout, " %d columns left out", len(t.Omitted))
+		}
+		if t.Deleted > 0 {
+			fmt.Fprintf(stdout, " + %d deleted rows in %s", t.Deleted, t.DeletedFile)
 		}
 		fmt.Fprintln(stdout)
 	}

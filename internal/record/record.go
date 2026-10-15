@@ -269,3 +269,29 @@ func Unpack(b []byte, long bool) ([]byte, error) {
 	}
 	return out, nil
 }
+
+// ApplyDelta rebuilds an older record version from the newer version and
+// the differences stored in its place (the newer one has FlagDelta). The
+// differences are a list of control bytes: n > 0 is followed by n bytes of
+// the older version; n < 0 takes -n bytes unchanged from the newer one.
+func ApplyDelta(newer, diff []byte) ([]byte, error) {
+	out := make([]byte, 0, len(newer))
+	for i := 0; i < len(diff); {
+		c := int(int8(diff[i]))
+		i++
+		switch {
+		case c > 0:
+			if i+c > len(diff) {
+				return nil, fmt.Errorf("differences: %d bytes at offset %d run past the end", c, i-1)
+			}
+			out = append(out, diff[i:i+c]...)
+			i += c
+		case c < 0:
+			if len(out)-c > len(newer) {
+				return nil, fmt.Errorf("differences: copy of %d bytes at %d runs past the newer version (%d bytes)", -c, len(out), len(newer))
+			}
+			out = append(out, newer[len(out):len(out)-c]...)
+		}
+	}
+	return out, nil
+}

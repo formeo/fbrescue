@@ -80,24 +80,20 @@ func (c *Catalog) Records(rel uint16, fn func(v Version, rec []byte, err error) 
 	return nil
 }
 
-// visible calls fn for the current committed, non-deleted rows of a system
-// table, warning about anything it has to skip.
+// visible calls fn for the current rows of a system table, warning about
+// anything it has to skip.
 func (c *Catalog) visible(rel uint16, fn func(v Version, rec []byte)) error {
 	return c.Records(rel, func(v Version, rec []byte, err error) error {
 		if err != nil {
 			c.warn("system table %d: %v", rel, err)
 			return nil
 		}
-		ok, err := c.Committed(v.Header.Tx)
+		r, ok, err := c.Current(v, rec)
 		switch {
 		case err != nil:
 			c.warn("system table %d, page %d line %d: %v", rel, v.Page, v.Line, err)
-		case !ok:
-			// An uncommitted metadata change: the committed version is
-			// older. Rare (DDL is committed immediately); not followed yet.
-			c.warn("system table %d, page %d line %d: uncommitted change skipped", rel, v.Page, v.Line)
-		case v.Header.Flags&record.FlagDeleted == 0:
-			fn(v, rec)
+		case ok && !r.Deleted:
+			fn(Version{Page: r.Page, Line: r.Line, Header: r.Header}, r.Data)
 		}
 		return nil
 	})
