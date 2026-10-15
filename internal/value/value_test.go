@@ -1,7 +1,9 @@
 package value
 
 import (
+	"fmt"
 	"math"
+	"strconv"
 	"testing"
 )
 
@@ -83,4 +85,62 @@ func TestConvert(t *testing.T) {
 	if _, err := Convert(Text{S: "x"}, Field{DType: TypeDate}); err == nil {
 		t.Error("text to date should fail")
 	}
+}
+
+func TestFirebird4Types(t *testing.T) {
+	// Raw bytes from the fb4types corpus database, as Firebird 4 and 5 store them.
+	for _, tc := range []struct {
+		hex  string
+		f    Field
+		want string
+	}{
+		{"ffffffffffffffffffffffffffffff7f", Field{DType: TypeInt128}, "170141183460469231731687303715884105727"},
+		{"00000000000000000000000000000080", Field{DType: TypeInt128}, "-170141183460469231731687303715884105728"},
+		{"ffffffffffffffffffffffffffffffff", Field{DType: TypeInt128, Scale: -4}, "-0.0001"},
+		{"568ee2c1b934ad46", Field{DType: TypeDec64}, "1.234567890123456E+300"},
+		{"010000000000fca1", Field{DType: TypeDec64}, "-1E-15"},
+		{"0000000000003822", Field{DType: TypeDec64}, "0"},
+		{"1500000000003422", Field{DType: TypeDec64}, "1.5"},
+		{"fffcf3cf3ffffcf3cf3ffffcf3cffff7", Field{DType: TypeDec128}, "-9.999999999999999999999999999999999E+6144"},
+		{"01000000000000000000000000400800", Field{DType: TypeDec128}, "1E-6143"},
+		{"3435827771123c6fe5281e9c4b930726", Field{DType: TypeDec128}, "12345678901234567890123456789012.34"},
+	} {
+		b, _ := hexDecode(tc.hex)
+		v, err := DecodeBytes(b, tc.f, Options{})
+		if err != nil || v.(fmt.Stringer).String() != tc.want {
+			t.Errorf("%s: got %v, %v; want %s", tc.hex, v, err, tc.want)
+		}
+	}
+	for _, tc := range []struct {
+		hex  string
+		f    Field
+		want string
+	}{
+		{"d2ca8f1428feffff", Field{DType: TypeTimeTZ}, "12:34:56.7890 Europe/Moscow"},
+		{"805ab227e9060000", Field{DType: TypeTimeTZ}, "00:00:00.0000 +05:30"},
+		{"d2eb0000ff94ba0a51ffffff", Field{DType: TypeTimestampTZ}, "2024-02-29 23:59:59.9999 America/New_York"},
+		{"2b5f2d00ff297515c9fdffff", Field{DType: TypeTimestampTZ}, "9999-12-31 23:59:59.9999 Pacific/Kiritimati"},
+	} {
+		b, _ := hexDecode(tc.hex)
+		v, err := DecodeBytes(b, tc.f, Options{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		s, err := v.(interface{ Format() (string, error) }).Format()
+		if err != nil || s != tc.want {
+			t.Errorf("%s: got %q, %v; want %q", tc.hex, s, err, tc.want)
+		}
+	}
+}
+
+func hexDecode(s string) ([]byte, error) {
+	b := make([]byte, len(s)/2)
+	for i := range b {
+		v, err := strconv.ParseUint(s[2*i:2*i+2], 16, 8)
+		if err != nil {
+			return nil, err
+		}
+		b[i] = byte(v)
+	}
+	return b, nil
 }

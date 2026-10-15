@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -46,7 +48,7 @@ func TestNeverWrites(t *testing.T) {
 
 			out := t.TempDir()
 			for _, args := range [][]string{{"info", path}, {"info", "--json", path}, {"scan", path}, {"scan", "--json", path},
-				{"tables", path}, {"export", "--format", "sql", "--out", out, path}} {
+				{"tables", path}, {"page", path, "1"}, {"page", "--json", path, "0"}, {"export", "--format", "sql", "--out", out, path}} {
 				var out, errOut bytes.Buffer
 				code := run(args, &out, &errOut)
 				// tables and export need an intact header and system tables:
@@ -110,4 +112,55 @@ func TestExitCodesAndJSON(t *testing.T) {
 func fileExists(p string) bool {
 	_, err := os.Stat(p)
 	return err == nil
+}
+
+// TestPage finds the data page of VERS in the versions database and checks
+// the version chain shown for it, and the pointer page that lists it.
+func TestPage(t *testing.T) {
+	for _, db := range corpus.List(t) {
+		if db.Name != "versions" {
+			continue
+		}
+		t.Run(db.Engine, func(t *testing.T) {
+			st, _ := os.Stat(db.Path)
+			var data, pointer *pageJSON
+			for n := 0; n < int(st.Size()/1024); n++ { // more than enough tries
+				var out, errOut bytes.Buffer
+				if run([]string{"page", "--json", db.Path, strconv.Itoa(n)}, &out, &errOut) != 0 {
+					break
+				}
+				var p pageJSON
+				if err := json.Unmarshal(out.Bytes(), &p); err != nil {
+					t.Fatal(err)
+				}
+				if p.Fields["table"] == "VERS" && p.TypeName == "data" {
+					data = &p
+				}
+				if p.Fields["table"] == "VERS" && p.TypeName == "pointer" {
+					pointer = &p
+				}
+			}
+			if data == nil || pointer == nil {
+				t.Fatal("no data or pointer page of VERS")
+			}
+			if !slices.Contains(pointer.Pages, data.Page) {
+				t.Errorf("pointer page %d lists %v, not %d", pointer.Page, pointer.Pages, data.Page)
+			}
+			var deltas, deadWithBack int
+			var one, six bool
+			for _, r := range data.Records {
+				if strings.HasPrefix(r.ValueErr, "stored as differences") {
+					deltas++
+				}
+				if r.TxState == "dead" && r.Back != "" {
+					deadWithBack++
+				}
+				one = one || r.TxState == "committed" && r.Values["V"] == `"one c"`
+				six = six || r.TxState == "dead" && r.Back == "" && r.Values["V"] == `"six never committed"`
+			}
+			if deltas == 0 || deadWithBack == 0 || !one || !six {
+				t.Errorf("%d delta back versions, %d dead versions with older ones, one c %v, six %v", deltas, deadWithBack, one, six)
+			}
+		})
+	}
 }

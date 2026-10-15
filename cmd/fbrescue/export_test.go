@@ -3,10 +3,13 @@ package main
 import (
 	"bytes"
 	"encoding/csv"
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -61,6 +64,7 @@ func exportedTables(t *testing.T, path string) []exportedTable {
 			Name    string
 			Columns []struct {
 				Name     string
+				Type     string
 				Exported bool
 			}
 		}
@@ -72,7 +76,14 @@ func exportedTables(t *testing.T, path string) []exportedTable {
 	for _, tb := range r.Tables {
 		et := exportedTable{name: tb.Name}
 		for _, c := range tb.Columns {
-			if c.Exported {
+			if !c.Exported {
+				continue
+			}
+			if strings.HasPrefix(c.Type, "BLOB") {
+				// isql prints blob ids, which differ between databases:
+				// compare length and the engine's hash of the content.
+				et.cols = append(et.cols, `octet_length("`+c.Name+`")`, `hash("`+c.Name+`")`)
+			} else {
 				et.cols = append(et.cols, `"`+c.Name+`"`)
 			}
 		}
@@ -86,7 +97,8 @@ func exportedTables(t *testing.T, path string) []exportedTable {
 // the new database prints exactly what SELECT on the original prints, value
 // for value, in the engine's own formatting.
 func TestExportRoundTrip(t *testing.T) {
-	roundTrip := map[string]bool{"base": true, "deleted": true, "readonly": true, "types": true, "layout": true, "manytx": true}
+	roundTrip := map[string]bool{"base": true, "deleted": true, "readonly": true, "types": true, "layout": true, "manytx": true,
+		"versions": true, "blobs": true, "fb4types": true}
 	for _, db := range corpus.List(t) {
 		if !roundTrip[db.Name] {
 			continue
@@ -96,8 +108,7 @@ func TestExportRoundTrip(t *testing.T) {
 			out := filepath.Join(dir, "out")
 			var stdout, stderr bytes.Buffer
 			code := run([]string{"export", "--format", "sql", "--out", out, db.Path}, &stdout, &stderr)
-			// layout has rows changed by a rolled-back transaction (RB), a BLOB
-			// column (BLOBS) and WIN1251 bytes in a NONE column (CS).
+			// layout has WIN1251 bytes in a NONE column (CS).
 			wantCode := 0
 			if db.Name == "layout" {
 				wantCode = 2
@@ -106,6 +117,11 @@ func TestExportRoundTrip(t *testing.T) {
 				t.Fatalf("export: exit %d, want %d\n%s%s", code, wantCode, stdout.String(), stderr.String())
 			}
 
+			if db.Engine == "fb25" && db.Name == "blobs" {
+				// Firebird 2.5's isql does not take statements over 64 KB, and
+				// the level-1 blob row is larger: see TestExportBlobContents.
+				t.Skip("isql 2.5 statement limit")
+			}
 			newDB := filepath.Join(dir, "new.fdb")
 			fbTool(t, db.Engine, "create database '"+newDB+"' default character set utf8; quit;", "isql", "-q")
 			fbTool(t, db.Engine, "", "isql", "-q", "-b", "-ch", "UTF8", "-i", filepath.Join(out, "schema.sql"), newDB)
@@ -121,8 +137,8 @@ func TestExportRoundTrip(t *testing.T) {
 				}
 				fbTool(t, db.Engine, "", "isql", "-q", "-b", "-ch", "UTF8", "-i", filepath.Join(out, tb.name+".sql"), newDB)
 				where := ""
-				if tb.name == "RB" { // rows 1 and 2 need the older committed version: v0.3
-					where = " where id not in (1, 2)"
+				if tb.name == "BL" { // blobs over 1 MB go to files, not the SQL: see TestExportBlobFiles
+					where = " where id not in (5, 8)"
 				}
 				q := "set list on; select " + strings.Join(tb.cols, ", ") + ` from "` + tb.name + `"` + where + " order by 1; quit;"
 				want := fbTool(t, db.Engine, q, "isql", "-q", "-ch", "UTF8", orig)
@@ -278,13 +294,12 @@ func TestExportWarnings(t *testing.T) {
 			}
 			switch db.Name {
 			case "layout":
+				// RB: the rolled-back update and delete read their older
+				// version; the rolled-back insert is not a row. CS is left as
+				// raw bytes with a warning, hence exit status 2.
 				rb, blobs := res.Tables[tables["RB"]], res.Tables[tables["BLOBS"]]
-				if code != 2 || rb.Rows != 18 || rb.Skipped != 2 || res.Errors != 2 || len(blobs.Omitted) != 1 || blobs.Rows != 3000 {
+				if code != 2 || rb.Rows != 20 || rb.Skipped != 0 || res.Errors != 0 || len(blobs.Omitted) != 0 || blobs.Rows != 3000 {
 					t.Errorf("exit %d, RB %+v, BLOBS %+v, errors %d", code, rb, blobs, res.Errors)
-				}
-				errs, _ := os.ReadFile(filepath.Join(dir, "_errors.jsonl"))
-				if strings.Count(string(errs), `"table":"RB"`) != 2 {
-					t.Errorf("_errors.jsonl: %s", errs)
 				}
 			case "nblock":
 				if code != 2 || !strings.Contains(strings.Join(res.Warnings, "\n"), "nbackup lock") {
@@ -293,6 +308,136 @@ func TestExportWarnings(t *testing.T) {
 			case "big":
 				if code != 0 || res.Tables[tables["BIG"]].Rows != 34000 {
 					t.Errorf("exit %d, tables %+v", code, res.Tables)
+				}
+			}
+		})
+	}
+}
+
+// TestExportBlobContents checks blob values against the engine on every
+// version, including what the round trip cannot cover: blobs over 1 MB,
+// which the SQL export writes to files, and Firebird 2.5, whose isql does
+// not load statements over 64 KB. Lengths and substrings at several
+// offsets come from SELECT on the original.
+func TestExportBlobContents(t *testing.T) {
+	for _, db := range corpus.List(t) {
+		if db.Name != "blobs" {
+			continue
+		}
+		t.Run(db.Engine, func(t *testing.T) {
+			dir := t.TempDir()
+			var out, errOut bytes.Buffer
+			if code := run([]string{"export", "--out", filepath.Join(dir, "csv"), db.Path}, &out, &errOut); code != 0 {
+				t.Fatalf("csv: exit %d: %s%s", code, out.String(), errOut.String())
+			}
+			if code := run([]string{"export", "--format", "sql", "--out", filepath.Join(dir, "sql"), db.Path}, &out, &errOut); code != 0 {
+				t.Fatalf("sql: exit %d: %s%s", code, out.String(), errOut.String())
+			}
+			raw, _ := os.ReadFile(filepath.Join(dir, "csv", "BL.csv"))
+			recs, err := csv.NewReader(bytes.NewReader(raw)).ReadAll()
+			if err != nil {
+				t.Fatal(err)
+			}
+			orig := copyTo(t, db.Path, dir)
+			for _, r := range recs[1:] { // ID, TU, TW, TN, BIN
+				id := r[0]
+				var q strings.Builder
+				q.WriteString("set list on; select ")
+				var want []string
+				for i, col := range []string{"TU", "TW", "TN"} {
+					s := []rune(r[i+1])
+					if len(s) == 0 {
+						continue
+					}
+					q.WriteString(fmt.Sprintf("char_length(%s) L%d, ", col, i))
+					want = append(want, fmt.Sprintf("L%d %d", i, len(s)))
+					for k, at := range []int{0, len(s) / 2, max(len(s)-30, 0)} {
+						n := min(30, len(s)-at)
+						q.WriteString(fmt.Sprintf("replace(cast(substring(%s from %d for %d) as varchar(30)), ascii_char(10), '~') S%d%d, ", col, at+1, n, i, k))
+						want = append(want, fmt.Sprintf("S%d%d %s", i, k, strings.ReplaceAll(string(s[at:at+n]), "\n", "~")))
+					}
+				}
+				if b, _ := hex.DecodeString(r[4]); len(b) > 0 {
+					q.WriteString("octet_length(bin) LB, ")
+					want = append(want, fmt.Sprintf("LB %d", len(b)))
+					// Firebird 2.5 turns non-printable bytes into dots when it
+					// casts a binary blob to a string; the round trip checks
+					// binary content on 3.0+ (hash).
+					if db.Engine != "fb25" {
+						at := len(b) / 2
+						q.WriteString(fmt.Sprintf("cast(substring(bin from %d for 8) as varchar(8) character set octets) SB, ", at+1))
+						want = append(want, "SB "+strings.ToUpper(hex.EncodeToString(b[at:min(at+8, len(b))])))
+					}
+				}
+				if len(want) == 0 {
+					continue
+				}
+				q.WriteString("id from bl where id = " + id + "; quit;")
+				got := map[string]string{}
+				for _, l := range strings.Split(fbTool(t, db.Engine, q.String(), "isql", "-q", "-ch", "UTF8", orig), "\n") {
+					if len(l) > 32 {
+						got[strings.TrimSpace(l[:32])] = l[32:]
+					}
+				}
+				for _, w := range want {
+					k, v, _ := strings.Cut(w, " ")
+					if got[k] != v {
+						t.Errorf("row %s %s: export %q, engine %q", id, k, v, got[k])
+					}
+				}
+			}
+
+			// Blobs over 1 MB are files in the SQL export: same bytes as in CSV.
+			files, _ := filepath.Glob(filepath.Join(dir, "sql", "BL.blobs", "*"))
+			wantFiles := map[string]int{"fb50": 2}[db.Engine]
+			if wantFiles == 0 {
+				wantFiles = 1
+			}
+			if len(files) != wantFiles {
+				t.Errorf("blob files: %v", files)
+			}
+			for _, f := range files {
+				b, _ := os.ReadFile(f)
+				row, _, _ := strings.Cut(filepath.Base(f), ".")
+				var csvRow []string
+				for _, r := range recs[1:] {
+					if r[0] == map[string]string{"5": "5", "8": "8"}[row] {
+						csvRow = r
+					}
+				}
+				if csvRow == nil || string(b) != csvRow[1] || len(b) < 4<<20 {
+					t.Errorf("%s: %d bytes, not the CSV value of row %s", f, len(b), row)
+				}
+			}
+		})
+	}
+}
+
+// TestIncludeDeleted: deleted rows whose old version is still on disk are
+// written to <table>.deleted.<format>; the table file stays what SELECT
+// returns.
+func TestIncludeDeleted(t *testing.T) {
+	for _, db := range corpus.List(t) {
+		if db.Name != "deleted" {
+			continue
+		}
+		t.Run(db.Engine, func(t *testing.T) {
+			dir := t.TempDir()
+			var out, errOut bytes.Buffer
+			if code := run([]string{"export", "--include-deleted", "--table", "T2", "--out", dir, db.Path}, &out, &errOut); code != 0 {
+				t.Fatalf("exit %d: %s%s", code, out.String(), errOut.String())
+			}
+			live, _ := os.ReadFile(filepath.Join(dir, "T2.csv"))
+			gone, _ := os.ReadFile(filepath.Join(dir, "T2.deleted.csv"))
+			lr, _ := csv.NewReader(bytes.NewReader(live)).ReadAll()
+			dr, _ := csv.NewReader(bytes.NewReader(gone)).ReadAll()
+			if len(lr) != 751 || len(dr) != 251 {
+				t.Fatalf("%d live and %d deleted rows, want 750 and 250", len(lr)-1, len(dr)-1)
+			}
+			for _, r := range dr[1:] {
+				// deleted.sql removed the rows with id divisible by 4
+				if id, _ := strconv.Atoi(r[0]); id%4 != 0 || r[1] != "Row "+r[0] {
+					t.Errorf("deleted row %v", r)
 				}
 			}
 		})

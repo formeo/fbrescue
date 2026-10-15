@@ -67,7 +67,8 @@ func (f Field) Stored() bool { return f.DType != 0 && f.Offset != 0 }
 func (f Field) Supported() bool {
 	switch f.DType {
 	case TypeText, TypeVarying, TypeShort, TypeLong, TypeInt64, TypeReal, TypeDouble,
-		TypeDate, TypeTime, TypeTimestamp, TypeBoolean:
+		TypeDate, TypeTime, TypeTimestamp, TypeBoolean, TypeBlob,
+		TypeInt128, TypeDec64, TypeDec128, TypeTimeTZ, TypeTimestampTZ:
 		return true
 	}
 	return false
@@ -128,7 +129,8 @@ func IsNull(rec []byte, f Field) bool {
 }
 
 // Decode returns the value of field f in record rec: nil for NULL, or one
-// of Decimal, float32, float64, Date, Time, Timestamp, Text, Octets, bool.
+// of Decimal, BigDecimal, DecFloat, float32, float64, Date, Time, Timestamp,
+// TimeTZ, TimestampTZ, Text, Octets, bool, BlobRef.
 func Decode(rec []byte, f Field, opt Options) (any, error) {
 	if IsNull(rec, f) {
 		return nil, nil
@@ -161,6 +163,18 @@ func DecodeBytes(b []byte, f Field, opt Options) (any, error) {
 		return Timestamp{Date(int32(le.Uint32(b))), Time(le.Uint32(b[4:]))}, nil
 	case TypeBoolean:
 		return b[0] != 0, nil
+	case TypeInt128:
+		return decodeInt128(b, f.Scale), nil
+	case TypeDec64, TypeDec128:
+		return decodeDecFloat(b), nil
+	case TypeTimeTZ:
+		return TimeTZ{Time(le.Uint32(b)), le.Uint16(b[4:])}, nil
+	case TypeTimestampTZ:
+		return TimestampTZ{Timestamp{Date(int32(le.Uint32(b))), Time(le.Uint32(b[4:]))}, le.Uint16(b[8:])}, nil
+	case TypeBlob:
+		// For blobs the scale holds the character set of text.
+		return BlobRef{Relation: le.Uint16(b), Number: uint64(b[2])<<32 | uint64(le.Uint32(b[4:])),
+			SubType: f.SubType, Charset: int(uint8(f.Scale))}, nil
 	case TypeText:
 		if f.Charset() == 1 {
 			return Octets(append([]byte(nil), b...)), nil
@@ -188,6 +202,9 @@ func DecodeBytes(b []byte, f Field, opt Options) (any, error) {
 	}
 	return nil, fmt.Errorf("unsupported data type %d", f.DType)
 }
+
+// DecodeText converts text in character set cs to UTF-8.
+func DecodeText(b []byte, cs int, opt Options) Text { return decodeText(b, cs, opt) }
 
 func decodeText(b []byte, cs int, opt Options) Text {
 	if cs == 0 && opt.NoneCharset != 0 {
