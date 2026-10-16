@@ -3,15 +3,29 @@ package main
 import (
 	"fmt"
 	"io"
+	"os"
 
+	"github.com/formeo/fbrescue/internal/ddl"
 	"github.com/formeo/fbrescue/internal/export"
 	"github.com/formeo/fbrescue/internal/fdb"
 	"github.com/formeo/fbrescue/internal/meta"
 	"github.com/formeo/fbrescue/internal/value"
 )
 
-func openCatalog(cmd, path string, stderr io.Writer) (*fdb.File, *meta.Catalog, bool) {
-	db, err := fdb.Open(path)
+func openCatalog(cmd string, a cliArgs, stderr io.Writer) (*fdb.File, *meta.Catalog, bool) {
+	var defs []*ddl.Table
+	var ddlWarnings []string
+	if a.ddl != "" {
+		b, err := os.ReadFile(a.ddl)
+		if err == nil {
+			defs, ddlWarnings, err = ddl.Parse(string(b))
+		}
+		if err != nil {
+			fmt.Fprintf(stderr, "fbrescue %s: --ddl %s: %v\n", cmd, a.ddl, err)
+			return nil, nil, false
+		}
+	}
+	db, err := fdb.Open(a.path)
 	if err != nil {
 		fmt.Fprintf(stderr, "fbrescue %s: %v\n", cmd, err)
 		return nil, nil, false
@@ -21,6 +35,12 @@ func openCatalog(cmd, path string, stderr io.Writer) (*fdb.File, *meta.Catalog, 
 		db.Close()
 		fmt.Fprintf(stderr, "fbrescue %s: %v\n", cmd, err)
 		return nil, nil, false
+	}
+	for _, w := range ddlWarnings {
+		cat.Warnings = append(cat.Warnings, "--ddl: "+w)
+	}
+	if defs != nil {
+		cat.UseDDL(defs)
 	}
 	return db, cat, true
 }
@@ -41,7 +61,7 @@ type tableJSON struct {
 }
 
 func runTables(a cliArgs, stdout, stderr io.Writer) int {
-	db, cat, ok := openCatalog("tables", a.path, stderr)
+	db, cat, ok := openCatalog("tables", a, stderr)
 	if !ok {
 		return 1
 	}
@@ -82,7 +102,7 @@ func runExport(a cliArgs, stdout, stderr io.Writer) int {
 		}
 		opt.Value.NoneCharset = id
 	}
-	db, cat, ok := openCatalog("export", a.path, stderr)
+	db, cat, ok := openCatalog("export", a, stderr)
 	if !ok {
 		return 1
 	}

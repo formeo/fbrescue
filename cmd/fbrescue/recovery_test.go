@@ -27,6 +27,7 @@ type tally struct {
 	trials, failed, panics                  int
 	rows, correct, missing, extra           int
 	changedReported, changedSilent, colErrs int
+	ddlCorrect, ddlWrong                    int // the same with --ddl (wrong: silently changed or extra)
 }
 
 // Recovery the tests insist on, per kind of damage: the share of rows
@@ -52,6 +53,13 @@ var recoveryFloor = map[string]struct {
 // With FBRESCUE_RECOVERY_REPORT set, the table is written to that file.
 func TestRecovery(t *testing.T) {
 	results := map[string]*tally{}
+	// The DDL a user would have: the script that created the database.
+	script, err := os.ReadFile("../../tools/mkcorpus/sql/shop.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ddlPath := filepath.Join(t.TempDir(), "shop.sql")
+	os.WriteFile(ddlPath, append([]byte("/* CREATE DATABASE 'shop.fdb' DEFAULT CHARACTER SET UTF8; */\n"), script...), 0o644)
 	for _, db := range corpus.List(t) {
 		if db.Name != "shop" {
 			continue
@@ -82,6 +90,7 @@ func TestRecovery(t *testing.T) {
 					t.Fatal(err)
 				}
 				got, colErrs, panicked, err := exportRows(path, filepath.Join(dir, "out"))
+				withDDL, ddlColErrs, _, _ := exportRows(path, filepath.Join(dir, "ddl"), "--ddl", ddlPath)
 				tl.trials++
 				switch {
 				case panicked != "":
@@ -99,6 +108,10 @@ func TestRecovery(t *testing.T) {
 				tl.rows, tl.correct, tl.missing, tl.extra = tl.rows+tr.rows, tl.correct+tr.correct, tl.missing+tr.missing, tl.extra+tr.extra
 				tl.changedReported += reported
 				tl.changedSilent += tr.changedSilent - reported
+				var td tally
+				compareRows(truth, withDDL, &td)
+				tl.ddlCorrect += td.correct
+				tl.ddlWrong += td.extra + td.changedSilent - min(td.changedSilent, ddlColErrs)
 				if testing.Verbose() && tr.correct < tr.rows {
 					t.Logf("%s, %s, seed %d: %d rows missing, %d changed (%d values reported unreadable), %d extra",
 						db.Engine, k.Name, seed, tr.missing, tr.changedSilent, colErrs, tr.extra)
@@ -111,7 +124,7 @@ func TestRecovery(t *testing.T) {
 	}
 
 	var md strings.Builder
-	fmt.Fprintf(&md, "| Damage | Copies | Rows recovered | Changed, reported | Changed silently | Extra rows | Export failed |\n|---|--:|--:|--:|--:|--:|--:|\n")
+	fmt.Fprintf(&md, "| Damage | Copies | Rows recovered | With --ddl | Changed, reported | Changed silently | Extra rows | Export failed |\n|---|--:|--:|--:|--:|--:|--:|--:|\n")
 	for _, k := range damage.Kinds {
 		tl := results[k.Name]
 		if tl.trials == 0 {
@@ -119,8 +132,12 @@ func TestRecovery(t *testing.T) {
 			continue
 		}
 		pct := 100 * float64(tl.correct) / float64(tl.rows)
-		fmt.Fprintf(&md, "| %s | %d | %.1f%% | %d | %d | %d | %d |\n", k.Name, tl.trials, pct,
+		pctDDL := 100 * float64(tl.ddlCorrect) / float64(tl.rows)
+		fmt.Fprintf(&md, "| %s | %d | %.1f%% | %.1f%% | %d | %d | %d | %d |\n", k.Name, tl.trials, pct, pctDDL,
 			tl.changedReported, tl.changedSilent, tl.extra, tl.failed)
+		if tl.ddlCorrect < tl.correct || tl.ddlWrong > tl.changedSilent+tl.extra {
+			t.Errorf("%s: with --ddl %d rows correct and %d wrong, without %d and %d", k.Name, tl.ddlCorrect, tl.ddlWrong, tl.correct, tl.changedSilent+tl.extra)
+		}
 		floor, ok := recoveryFloor[k.Name]
 		switch {
 		case !ok:
@@ -141,14 +158,14 @@ func TestRecovery(t *testing.T) {
 
 // exportRows exports a database to CSV and returns each table's rows by
 // primary key. A panic is reported, not propagated.
-func exportRows(path, dir string) (rows map[string]map[string]string, colErrs int, panicked string, err error) {
+func exportRows(path, dir string, options ...string) (rows map[string]map[string]string, colErrs int, panicked string, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			panicked = fmt.Sprintf("%v\n%s", r, debug.Stack())
 		}
 	}()
 	var out, errOut bytes.Buffer
-	if code := run([]string{"export", "--out", dir, path}, &out, &errOut); code == 1 {
+	if code := run(append([]string{"export", "--out", dir, path}, options...), &out, &errOut); code == 1 {
 		return nil, 0, "", fmt.Errorf("exit 1: %s", errOut.String())
 	}
 	if b, err := os.ReadFile(filepath.Join(dir, "_errors.jsonl")); err == nil {

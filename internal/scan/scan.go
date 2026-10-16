@@ -118,7 +118,7 @@ type scanner struct {
 // to time with the number of pages done.
 func Run(db *fdb.File, progress func(done, total uint32)) *Report {
 	s := &scanner{
-		db:   db,
+		db: db,
 		r: &Report{Pages: db.Pages, PageTypes: map[string]uint32{}, Relations: []Relation{}, Problems: []Problem{},
 			DataPages: map[uint16][]DataPage{}, Misplaced: map[uint32][]uint32{}},
 		data: make([]dataPage, db.Pages),

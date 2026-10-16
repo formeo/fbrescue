@@ -272,7 +272,10 @@ func exportTable(cat *meta.Catalog, t *meta.Table, opt Options, tr *TableResult,
 	// as rowErr, column-level ones leave the column NULL and are logged.
 	values := func(r meta.Row) (rowErr string, err error) {
 		fm, ok := t.Formats[uint16(r.Header.Format)]
-		if !ok {
+		switch {
+		case !ok && t.FromDDL:
+			return fmt.Sprintf("record format %d: the layout from the DDL is for format %d, the newest", r.Header.Format, t.CurrentFormat), nil
+		case !ok:
 			return fmt.Sprintf("record format %d is not in RDB$FORMATS", r.Header.Format), nil
 		}
 		for i, c := range cols {
@@ -470,7 +473,9 @@ func WriteSchema(w io.Writer, tables []*meta.Table) error {
 			ok, why := Exported(c)
 			switch {
 			case c.Computed:
-				lines = append(lines, fmt.Sprintf("  -- %s COMPUTED BY (...): expression not recovered", quote(c.Name)))
+				// The column keeps its place, so that its field id stays
+				// that of the stored records (this file also works as --ddl).
+				lines = append(lines, fmt.Sprintf("  %s COMPUTED BY (CAST(NULL AS %s)) -- the expression is not stored with the data", quote(c.Name), c.Field.SQLType()))
 			case !ok:
 				lines = append(lines, fmt.Sprintf("  %s %s -- %s", quote(c.Name), c.Field.SQLType(), why))
 			default:

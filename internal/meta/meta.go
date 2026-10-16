@@ -9,6 +9,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 
@@ -37,6 +38,7 @@ type Catalog struct {
 	pageSeq   map[uint32]relSeq // data page -> its relation and sequence number
 	dataPages map[uint16][]uint32
 	dataErr   map[uint16]error
+	noFormat  map[uint16]string // tables with data whose record format is lost -> name ("" if unknown)
 }
 
 // Table is a user table.
@@ -45,6 +47,10 @@ type Table struct {
 	Name    string
 	Columns []*Column // in the order of SELECT *
 	Formats map[uint16]*Format
+
+	CurrentFormat uint16 // the format new records are written with
+	Lost          bool   // missing from RDB$RELATIONS: name and column names are made up
+	FromDDL       bool   // layout computed from user-supplied DDL, for records of CurrentFormat only
 }
 
 // Column is a column of a table as of its current format.
@@ -105,6 +111,7 @@ func load(db *fdb.File, rep *scan.Report) (*Catalog, error) {
 		pointers: map[uint16][]pointerPage{}, tipCache: map[uint32][]byte{},
 		seqPages: map[uint16]map[uint32]uint32{},
 		pageScan: rep, pageSeq: map[uint32]relSeq{}, dataPages: map[uint16][]uint32{}, dataErr: map[uint16]error{},
+		noFormat: map[uint16]string{},
 	}
 	for rel, dps := range rep.DataPages {
 		for _, d := range dps {
@@ -313,6 +320,7 @@ type relation struct {
 	name    string
 	format  uint16
 	regular bool // persistent user table: not a view, external, virtual or temporary table
+	lost    bool // not in RDB$RELATIONS
 }
 
 type relField struct {
@@ -365,7 +373,7 @@ func (c *Catalog) loadTables(formats map[formatKey]*Format) error {
 		if !r.regular {
 			continue
 		}
-		t := &Table{ID: r.id, Name: r.name, Formats: map[uint16]*Format{}}
+		t := &Table{ID: r.id, Name: r.name, Formats: map[uint16]*Format{}, CurrentFormat: r.format, Lost: r.lost}
 		for k, fm := range formats {
 			if k.rel == r.id {
 				t.Formats[k.format] = fm
@@ -373,7 +381,8 @@ func (c *Catalog) loadTables(formats map[formatKey]*Format) error {
 		}
 		cur, ok := t.Formats[r.format]
 		if !ok {
-			c.warn("table %s: current format %d is missing from RDB$FORMATS; the table is skipped", r.name, r.format)
+			c.warn("table %s: current format %d is missing from RDB$FORMATS; the table is skipped (--ddl can supply its layout)", r.name, r.format)
+			c.noFormat[r.id] = r.name
 			continue
 		}
 		rfs := fields[r.name]
@@ -499,13 +508,21 @@ func (c *Catalog) lostRelations(rels []relation, formats map[formatKey]*Format) 
 		}
 	}
 	var out []relation
-	for id, f := range latest {
+	for _, id := range slices.Sorted(maps.Keys(latest)) {
+		f := latest[id]
 		if len(c.pageScan.DataPages[id]) == 0 && len(c.pointers[id]) == 0 {
 			continue // a view or a temporary table: nothing to export
 		}
-		r := relation{id: id, name: fmt.Sprintf("TABLE_%d", id), format: f, regular: true}
+		r := relation{id: id, name: fmt.Sprintf("TABLE_%d", id), format: f, regular: true, lost: true}
 		c.warn("table %d is missing from RDB$RELATIONS but has data: exported as %s, with its newest format (%d)", id, r.name, f)
 		out = append(out, r)
+	}
+	ids := slices.Sorted(maps.Keys(c.pageScan.DataPages))
+	for _, id := range ids {
+		if _, ok := latest[id]; id >= firstUserRelation && !known[id] && !ok {
+			c.warn("data pages of table %d were found, but the table is missing from RDB$RELATIONS and RDB$FORMATS (--ddl can supply its layout)", id)
+			c.noFormat[id] = ""
+		}
 	}
 	return out
 }

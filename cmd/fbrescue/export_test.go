@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/csv"
 	"encoding/hex"
 	"encoding/json"
@@ -9,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -442,6 +444,62 @@ func TestIncludeDeleted(t *testing.T) {
 				// deleted.sql removed the rows with id divisible by 4
 				if id, _ := strconv.Atoi(r[0]); id%4 != 0 || r[1] != "Row "+r[0] {
 					t.Errorf("deleted row %v", r)
+				}
+			}
+		})
+	}
+}
+
+// TestExportWithDDL: with the data pages of system tables zeroed, --ddl
+// with the script that created the database brings back exactly the
+// intact export: matched by name (RDB$FORMATS lost), by record length
+// (RDB$FORMATS and RDB$RELATIONS lost), or by layout (RDB$RELATIONS lost:
+// without --ddl the tables come out as TABLE_<id> with FIELD_<n> columns).
+func TestExportWithDDL(t *testing.T) {
+	script, err := os.ReadFile("../../tools/mkcorpus/sql/shop.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ddlPath := filepath.Join(t.TempDir(), "shop.sql")
+	os.WriteFile(ddlPath, append([]byte("/* CREATE DATABASE 'shop.fdb' DEFAULT CHARACTER SET UTF8; */\n"), script...), 0o644)
+	tables := []string{"CUSTOMERS", "ORDERS", "ITEMS"}
+	for _, db := range corpus.List(t) {
+		if db.Name != "shop" {
+			continue
+		}
+		t.Run(db.Engine, func(t *testing.T) {
+			want := t.TempDir()
+			var out, errOut bytes.Buffer
+			if code := run([]string{"export", "--out", want, db.Path}, &out, &errOut); code != 0 {
+				t.Fatalf("intact: exit %d: %s", code, errOut.String())
+			}
+			for _, lost := range [][]uint16{{8}, {6, 8}, {6}} {
+				orig, _ := os.ReadFile(db.Path)
+				ps := int(binary.LittleEndian.Uint16(orig[0x10:]))
+				zeroed := 0
+				for p := 1; (p+1)*ps <= len(orig); p++ {
+					page := orig[p*ps : (p+1)*ps]
+					if page[0] == 5 && slices.Contains(lost, binary.LittleEndian.Uint16(page[0x14:])) {
+						clear(page)
+						zeroed++
+					}
+				}
+				dir := t.TempDir()
+				path := filepath.Join(dir, "shop.fdb")
+				os.WriteFile(path, orig, 0o644)
+
+				got := filepath.Join(dir, "out")
+				out.Reset()
+				errOut.Reset()
+				if code := run([]string{"export", "--ddl", ddlPath, "--out", got, path}, &out, &errOut); code != 2 {
+					t.Fatalf("relations %v lost: exit %d, want 2: %s%s", lost, code, out.String(), errOut.String())
+				}
+				for _, tb := range tables {
+					a, _ := os.ReadFile(filepath.Join(want, tb+".csv"))
+					b, err := os.ReadFile(filepath.Join(got, tb+".csv"))
+					if err != nil || !bytes.Equal(a, b) {
+						t.Errorf("relations %v lost (%d pages): %s.csv differs from the intact export (%v)\n%s", lost, zeroed, tb, err, out.String())
+					}
 				}
 			}
 		})

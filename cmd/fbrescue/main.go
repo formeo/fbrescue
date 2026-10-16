@@ -30,6 +30,8 @@ Options:
   --table NAME                export: only this table; repeat for more
   --charset NAME              export: decode CHARACTER SET NONE text as NAME, e.g. WIN1251
   --include-deleted           export: also write deleted rows still on disk, to <table>.deleted.<format>
+  --ddl FILE                  export, tables: CREATE TABLE statements for tables whose definition
+                              is lost from the database (e.g. a schema.sql of an earlier export)
 
   page    <db> <N>            decode one page: header, pointer slots, records and their values
 
@@ -93,6 +95,7 @@ type cliArgs struct {
 	out            string
 	format         string
 	charset        string
+	ddl            string
 	tables         []string
 	pageNo         string // page: the page number
 }
@@ -101,7 +104,7 @@ type cliArgs struct {
 // as --name value or --name=value.
 func parseArgs(cmd string, in []string) (cliArgs, error) {
 	a := cliArgs{format: "csv"}
-	valued := map[string]*string{"out": &a.out, "format": &a.format, "charset": &a.charset, "table": nil}
+	valued := map[string]*string{"out": &a.out, "format": &a.format, "charset": &a.charset, "ddl": &a.ddl, "table": nil}
 	var paths []string
 	for i := 0; i < len(in); i++ {
 		arg := in[i]
@@ -119,7 +122,7 @@ func parseArgs(cmd string, in []string) (cliArgs, error) {
 			continue
 		}
 		dst, ok := valued[name]
-		if !ok || cmd != "export" {
+		if !ok || cmd != "export" && !(cmd == "tables" && name == "ddl") {
 			return a, fmt.Errorf("unknown option %s", arg)
 		}
 		if !hasVal {
