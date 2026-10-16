@@ -7,10 +7,19 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime/debug"
 	"strings"
 )
 
+// version is set by release builds (-ldflags "-X main.version=v1.2.3");
+// go install of a tagged version gets it from the module version.
 var version = "dev"
+
+func init() {
+	if bi, ok := debug.ReadBuildInfo(); ok && version == "dev" && strings.HasPrefix(bi.Main.Version, "v") {
+		version = bi.Main.Version
+	}
+}
 
 const usage = `fbrescue - read-only data recovery for Firebird 2.5-5.0 databases.
 The source database file is never modified.

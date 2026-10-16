@@ -1,0 +1,57 @@
+# Releases a version when its tag is pushed:
+#
+#   git tag v0.4.0 && git push origin v0.4.0
+#
+# All tests run first (ci.yml, including the corpus of real Firebird
+# databases). Then the archives are built (tools/release/build.sh), given
+# build provenance attestations, and published as a GitHub release with
+# the version's CHANGELOG.md section as notes. A tag without a CHANGELOG.md
+# section fails before anything is built.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  notes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: tools/release/notes.sh "$GITHUB_REF_NAME" > /dev/null
+
+  test:
+    needs: notes
+    uses: ./.github/workflows/ci.yml
+
+  release:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write     # create the release
+      id-token: write     # sign the attestations
+      attestations: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - run: tools/release/build.sh "$GITHUB_REF_NAME" dist
+      - name: Check the binary reports its version
+        run: |
+          mkdir check && tar -xzf "dist/fbrescue_${GITHUB_REF_NAME}_linux_amd64.tar.gz" -C check
+          test "$(check/fbrescue version)" = "fbrescue $GITHUB_REF_NAME"
+      - uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: dist/*
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tools/release/notes.sh "$GITHUB_REF_NAME" > notes.md
+          prerelease=""
+          [[ $GITHUB_REF_NAME == *-* ]] && prerelease="--prerelease"
+          gh release create "$GITHUB_REF_NAME" dist/* --verify-tag --title "fbrescue $GITHUB_REF_NAME" --notes-file notes.md $prerelease

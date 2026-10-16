@@ -11,11 +11,20 @@ Read-only data recovery for Firebird 2.5–5.0 databases.
 
 > **Status: v0.4.** `info` and `scan` analyze a database; `tables` and `export` get the schema and the data out without the engine — from intact databases, and from damaged ones as far as the pages allow ([recovery rate](#recovery-rate)); `page` shows a single page; `report` makes a diagnostic report without data. Not exported yet: arrays and records with 48-bit transaction numbers — reported, never silently dropped. On a damaged database, work on a copy and try `gfix` and `gbak` first: they are the engine's own tools.
 
+## Install
+
+Download the archive for your system from [Releases](https://github.com/formeo/fbrescue/releases/latest): a single binary for Windows, Linux or macOS, with nothing else to install. Each release lists SHA-256 checksums in `SHA256SUMS`, and every archive carries a build provenance attestation, so you can check that it was built from this repository by its release workflow:
+
+```
+sha256sum -c SHA256SUMS --ignore-missing
+gh attestation verify fbrescue_v0.4.0_windows_amd64.zip -R formeo/fbrescue
+```
+
+With Go 1.24 or later: `go install github.com/formeo/fbrescue/cmd/fbrescue@latest`.
+
 ## Usage
 
 ```
-$ go install github.com/formeo/fbrescue/cmd/fbrescue@latest
-
 $ fbrescue info shop.fdb
 File        shop.fdb · 2.4 MB · 307 pages × 8 KB
 Engine      ODS 13.1 (Firebird 5.0) · dialect 3
