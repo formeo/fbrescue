@@ -5,6 +5,7 @@ with a translation links to it and back (hreflang).
 Usage: python3 tools/site/check.py <built site dir>
 """
 import html.parser
+import os
 import pathlib
 import sys
 import urllib.parse
@@ -80,7 +81,7 @@ def main(site):
         if not (site / need).exists():
             errors.append(f"missing {need}")
     for e in errors:
-        print(e)
+        print(f"::error::{e}" if os.environ.get("GITHUB_ACTIONS") else e)
     print(f"{len(pages)} pages, {len(errors)} problems")
     return 1 if errors else 0
 
