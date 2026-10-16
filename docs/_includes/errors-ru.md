@@ -1,0 +1,6 @@
+- [`internal Firebird consistency check (decompression overran buffer (179))`]({{ '/ru/errors/decompression-overran-buffer/' | relative_url }}) — повреждены байты записи
+- [`internal Firebird consistency check (wrong record length (183))`]({{ '/ru/errors/wrong-record-length/' | relative_url }}) — запись не совпадает с форматом таблицы
+- [`internal Firebird consistency check (cannot find tip page (165))`]({{ '/ru/errors/cannot-find-tip-page/' | relative_url }}) — повреждена таблица состояний транзакций
+- [`database file appears corrupt` / `page is of wrong type`]({{ '/ru/errors/database-file-appears-corrupt/' | relative_url }}) — на странице не то, что должно быть
+- [`I/O error during "read" operation`]({{ '/ru/errors/io-error-during-read/' | relative_url }}) — файл короче базы или сбоит диск
+- [`gbak: ERROR` … `Exiting before completion due to errors`]({{ '/ru/errors/gbak-backup-fails/' | relative_url }}) — бэкап повреждённой базы обрывается

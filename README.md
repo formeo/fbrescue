@@ -11,6 +11,17 @@ Read-only data recovery for Firebird 2.5–5.0 databases.
 
 > **Status: v0.4.** `info` and `scan` analyze a database; `tables` and `export` get the schema and the data out without the engine — from intact databases, and from damaged ones as far as the pages allow ([recovery rate](#recovery-rate)); `page` shows a single page; `report` makes a diagnostic report without data. Not exported yet: arrays and records with 48-bit transaction numbers — reported, never silently dropped. On a damaged database, work on a copy and try `gfix` and `gbak` first: they are the engine's own tools.
 
+## When to use it
+
+The database does not open, a query or a backup stops with one of these, and Firebird's own `gfix` and `gbak` do not get past it:
+
+- `internal Firebird consistency check (decompression overran buffer (179))`, `(wrong record length (183))`, `(cannot find tip page (165))`
+- `database file appears corrupt`, `wrong page type`, `page ... is of wrong type (expected 5, found 0)`
+- `I/O error during "read" operation for file`, `Error while trying to read from file`
+- `gbak: ERROR` ... `gbak:Exiting before completion due to errors`
+
+What each one means and the order of steps that saves the most data: **[formeo.github.io/fbrescue](https://formeo.github.io/fbrescue/)** ([по-русски](https://formeo.github.io/fbrescue/ru/)).
+
 ## Install
 
 Download the archive for your system from [Releases](https://github.com/formeo/fbrescue/releases/latest): a single binary for Windows, Linux or macOS, with nothing else to install. Each release lists SHA-256 checksums in `SHA256SUMS`, and every archive carries a build provenance attestation, so you can check that it was built from this repository by its release workflow:

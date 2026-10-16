@@ -1,0 +1,6 @@
+- [`internal Firebird consistency check (decompression overran buffer (179))`]({{ '/errors/decompression-overran-buffer/' | relative_url }}) — a record's bytes are damaged
+- [`internal Firebird consistency check (wrong record length (183))`]({{ '/errors/wrong-record-length/' | relative_url }}) — a record does not match its table's layout
+- [`internal Firebird consistency check (cannot find tip page (165))`]({{ '/errors/cannot-find-tip-page/' | relative_url }}) — the transaction inventory is damaged
+- [`database file appears corrupt` / `page is of wrong type`]({{ '/errors/database-file-appears-corrupt/' | relative_url }}) — a page holds something other than it should
+- [`I/O error during "read" operation`]({{ '/errors/io-error-during-read/' | relative_url }}) — the file is shorter than the database, or the disk fails
+- [`gbak: ERROR` … `Exiting before completion due to errors`]({{ '/errors/gbak-backup-fails/' | relative_url }}) — the backup of a damaged database stops

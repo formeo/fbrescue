@@ -1,0 +1,22 @@
+# GitHub Pages site: https://formeo.github.io/fbrescue/
+# Built and deployed by .github/workflows/pages.yml.
+title: fbrescue
+description: Read-only data recovery for corrupted Firebird 2.5–5.0 databases. Gets the data out of databases that gbak cannot back up, without the Firebird engine.
+url: https://formeo.github.io
+baseurl: /fbrescue
+lang: en
+author: formeo
+plugins:
+  - jekyll-seo-tag
+  - jekyll-sitemap
+permalink: pretty
+markdown: kramdown
+kramdown:
+  input: GFM
+exclude:
+  - format.md # developer notes, read on GitHub
+defaults:
+  - scope:
+      path: ""
+    values:
+      layout: default
