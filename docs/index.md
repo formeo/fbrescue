@@ -1,8 +1,9 @@
 ---
 title: Recover data from a corrupted Firebird database
-description: What to do when a Firebird or InterBase database is corrupted and gbak cannot back it up — the engine's own tools first, then fbrescue, a free read-only tool that exports the data without the engine.
+description: What to do when a Firebird database is corrupted and gbak cannot back it up — the engine's own tools first, then fbrescue, a free read-only tool that exports the data without the engine.
 lang: en
 alt: /ru/
+software: true
 ---
 
 # Recover data from a corrupted Firebird database
@@ -24,7 +25,7 @@ Your Firebird database stopped opening, a query fails with `internal Firebird co
 
 How much comes back from each kind of damage is measured on hundreds of damaged copies of a test database on Firebird 2.5, 3.0, 4.0 and 5.0: see [the recovery rate](https://github.com/formeo/fbrescue#recovery-rate).
 
-fbrescue gets the data out; it does not repair the file in place. Indexes, triggers, procedures and users are not exported: create them again in the new database.
+fbrescue gets the data out; it does not repair the file in place. Indexes, triggers, procedures and users are not exported: create them again in the new database. How it compares with gfix/gbak and IBSurgeon FirstAID: [comparison](compare/); short answers: [FAQ](faq/).
 
 ## Common errors
 

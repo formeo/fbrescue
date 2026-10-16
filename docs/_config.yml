@@ -20,3 +20,7 @@ defaults:
       path: ""
     values:
       layout: default
+  - scope:
+      path: "googlec556762a732d5bd7.html" # Search Console ownership file
+    values:
+      sitemap: false

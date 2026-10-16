@@ -5,6 +5,7 @@ with a translation links to it and back (hreflang).
 Usage: python3 tools/site/check.py <built site dir>
 """
 import html.parser
+import json
 import os
 import pathlib
 import sys
@@ -18,7 +19,8 @@ class Page(html.parser.HTMLParser):
     def __init__(self):
         super().__init__()
         self.links, self.alternates, self.title, self.description, self.lang = [], {}, "", "", ""
-        self._in_title = False
+        self.jsonld = []  # parsed structured data, or the error
+        self._in_title = self._in_jsonld = False
 
     def handle_starttag(self, tag, attrs):
         a = dict(attrs)
@@ -31,13 +33,20 @@ class Page(html.parser.HTMLParser):
         if tag == "meta" and a.get("name") == "description":
             self.description = a.get("content", "")
         self._in_title = tag == "title"
+        if tag == "script" and a.get("type") == "application/ld+json":
+            self._in_jsonld = True
+            self.jsonld.append("")
 
     def handle_data(self, data):
         if self._in_title:
             self.title += data
+        if self._in_jsonld:
+            self.jsonld[-1] += data
 
     def handle_endtag(self, tag):
         self._in_title = False
+        if tag == "script":
+            self._in_jsonld = False
 
 
 def target(site, href):
@@ -66,6 +75,16 @@ def main(site):
             errors.append(f"{rel}: Liquid left unrendered")
         if not p.title.strip() or not p.description.strip():
             errors.append(f"{rel}: no title or description")
+        types = []
+        for block in p.jsonld:
+            try:
+                types.append(json.loads(block).get("@type"))
+            except ValueError as e:
+                errors.append(f"{rel}: structured data is not valid JSON: {e}")
+        expect = {"index.html": "SoftwareApplication", "ru/index.html": "SoftwareApplication",
+                  "faq/index.html": "FAQPage", "ru/faq/index.html": "FAQPage"}.get(str(rel))
+        if expect and expect not in types:
+            errors.append(f"{rel}: no {expect} structured data")
         if not p.alternates:
             errors.append(f"{rel}: no hreflang links (every page has a translation; is the front matter valid?)")
         if p.lang != p_lang(f, site):
@@ -85,6 +104,9 @@ def main(site):
                 errors.append(f"{rel}: hreflang {lang} points to a missing page {href}")
             elif pages[t].alternates.get(p_lang(f, site)) is None:
                 errors.append(f"{rel}: {href} does not link back")
+    sitemap = site / "sitemap.xml"
+    if sitemap.exists() and "google" in sitemap.read_text(encoding="utf-8"):
+        errors.append("sitemap.xml lists the Search Console verification file")
     for need in ["index.html", "ru/index.html", "errors/index.html", "sitemap.xml", "robots.txt"]:
         if not (site / need).exists():
             errors.append(f"missing {need}")
