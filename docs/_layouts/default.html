@@ -4,6 +4,39 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   {% seo %}
+  {%- if page.software %}
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "fbrescue",
+    "description": {{ site.description | jsonify }},
+    "applicationCategory": "UtilitiesApplication",
+    "applicationSubCategory": "Database recovery",
+    "operatingSystem": "Windows, Linux, macOS",
+    "license": "https://opensource.org/licenses/MIT",
+    "isAccessibleForFree": true,
+    "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"},
+    "downloadUrl": "https://github.com/formeo/fbrescue/releases/latest",
+    "codeRepository": "https://github.com/formeo/fbrescue",
+    "url": {{ '/' | absolute_url | jsonify }}
+  }
+  </script>
+  {%- endif %}
+  {%- if page.faq %}
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {%- for item in page.faq %}
+      {"@type": "Question", "name": {{ item.q | jsonify }},
+       "acceptedAnswer": {"@type": "Answer", "text": {{ item.a | markdownify | strip_html | strip_newlines | jsonify }}}}{% unless forloop.last %},{% endunless %}
+      {%- endfor %}
+    ]
+  }
+  </script>
+  {%- endif %}
   {%- if page.alt %}
   <link rel="alternate" hreflang="{{ page.lang | default: site.lang }}" href="{{ page.url | absolute_url }}">
   <link rel="alternate" hreflang="{% if page.lang == "ru" %}en{% else %}ru{% endif %}" href="{{ page.alt | absolute_url }}">
@@ -50,12 +83,16 @@
       {%- if page.lang == "ru" %}
       <a href="{{ '/ru/' | relative_url }}">Восстановление</a>
       <a href="{{ '/ru/errors/' | relative_url }}">Ошибки</a>
+      <a href="{{ '/ru/compare/' | relative_url }}">Сравнение</a>
+      <a href="{{ '/ru/faq/' | relative_url }}">FAQ</a>
       <a href="https://github.com/formeo/fbrescue/releases/latest">Скачать</a>
       <a href="https://github.com/formeo/fbrescue">GitHub</a>
       {%- if page.alt %}<a href="{{ page.alt | relative_url }}" hreflang="en">English</a>{% endif %}
       {%- else %}
       <a href="{{ '/' | relative_url }}">Recovery</a>
       <a href="{{ '/errors/' | relative_url }}">Errors</a>
+      <a href="{{ '/compare/' | relative_url }}">Compare</a>
+      <a href="{{ '/faq/' | relative_url }}">FAQ</a>
       <a href="https://github.com/formeo/fbrescue/releases/latest">Download</a>
       <a href="https://github.com/formeo/fbrescue">GitHub</a>
       {%- if page.alt %}<a href="{{ page.alt | relative_url }}" hreflang="ru">Русский</a>{% endif %}
