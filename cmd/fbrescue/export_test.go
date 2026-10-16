@@ -98,7 +98,7 @@ func exportedTables(t *testing.T, path string) []exportedTable {
 // for value, in the engine's own formatting.
 func TestExportRoundTrip(t *testing.T) {
 	roundTrip := map[string]bool{"base": true, "deleted": true, "readonly": true, "types": true, "layout": true, "manytx": true,
-		"versions": true, "blobs": true, "fb4types": true}
+		"versions": true, "blobs": true, "fb4types": true, "shop": true}
 	for _, db := range corpus.List(t) {
 		if !roundTrip[db.Name] {
 			continue
@@ -140,7 +140,11 @@ func TestExportRoundTrip(t *testing.T) {
 				if tb.name == "BL" { // blobs over 1 MB go to files, not the SQL: see TestExportBlobFiles
 					where = " where id not in (5, 8)"
 				}
-				q := "set list on; select " + strings.Join(tb.cols, ", ") + ` from "` + tb.name + `"` + where + " order by 1; quit;"
+				order := " order by 1"
+				if tb.name == "ITEMS" { // primary key (order_id, line)
+					order = " order by 1, 2"
+				}
+				q := "set list on; select " + strings.Join(tb.cols, ", ") + ` from "` + tb.name + `"` + where + order + "; quit;"
 				want := fbTool(t, db.Engine, q, "isql", "-q", "-ch", "UTF8", orig)
 				got := fbTool(t, db.Engine, q, "isql", "-q", "-ch", "UTF8", newDB)
 				if got != want {

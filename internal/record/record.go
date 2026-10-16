@@ -115,6 +115,9 @@ func (r *Reader) load(n uint32) error {
 	if err := r.db.ReadPage(n, r.page); err != nil {
 		return err
 	}
+	if err := r.db.CheckNumber(n, r.page); err != nil {
+		return err
+	}
 	r.pageNo = n
 	return nil
 }
@@ -182,6 +185,9 @@ func (r *Reader) Read(n uint32, line int) (Header, []byte, error) {
 		}
 		if r.frag[0] != fdb.TypeData {
 			return h, nil, fmt.Errorf("page %d line %d: fragment page %d is not a data page", n, line, fp)
+		}
+		if err := r.db.CheckNumber(fp, r.frag); err != nil {
+			return h, nil, fmt.Errorf("page %d line %d: fragment: %w", n, line, err)
 		}
 		cur, err = slot(r.frag, fl)
 		if err == nil && cur == nil {

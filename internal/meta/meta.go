@@ -14,6 +14,7 @@ import (
 
 	"github.com/formeo/fbrescue/internal/fdb"
 	"github.com/formeo/fbrescue/internal/record"
+	"github.com/formeo/fbrescue/internal/scan"
 	"github.com/formeo/fbrescue/internal/value"
 )
 
@@ -30,6 +31,12 @@ type Catalog struct {
 	tips     []uint32                 // transaction inventory pages by sequence
 	tipCache map[uint32][]byte
 	seqPages map[uint16]map[uint32]uint32 // relation -> data page sequence -> page
+
+	// One pass over all pages, for what the structure no longer tells.
+	pageScan  *scan.Report
+	pageSeq   map[uint32]relSeq // data page -> its relation and sequence number
+	dataPages map[uint16][]uint32
+	dataErr   map[uint16]error
 }
 
 // Table is a user table.
@@ -61,20 +68,48 @@ type Format struct {
 	Defaults map[int]any // ODS 12+: values for fields missing from older records
 }
 
+type relSeq struct {
+	rel uint16
+	seq uint32
+}
+
 type pointerPage struct {
 	seq, page uint32
 }
 
-// Load reads the catalog. It needs an intact header page and the system
-// tables it reads.
+// Load reads the catalog. Damage to the page structure (pointer pages,
+// RDB$PAGES, the transaction inventory, the header page) is worked around
+// where the pages themselves tell enough, with a warning.
 func Load(db *fdb.File) (*Catalog, error) {
-	if db.Header == nil {
-		return nil, errors.New("the header page is damaged; exporting needs it")
+	rep := scan.Run(db, nil)
+	moved := relocate(db, rep)
+	if moved > 0 {
+		rep = scan.Run(db, nil) // with the pages in their places
 	}
+	var c *Catalog
+	var err error
+	if db.Header == nil {
+		c, err = guessHeader(db, rep)
+	} else {
+		c, err = load(db, rep)
+	}
+	if err == nil && moved > 0 {
+		c.Warnings = append([]string{fmt.Sprintf("%d pages are stored at the location of another page; they are read from there", moved)}, c.Warnings...)
+	}
+	return c, err
+}
+
+func load(db *fdb.File, rep *scan.Report) (*Catalog, error) {
 	c := &Catalog{
 		db: db, rd: record.NewReader(db),
 		pointers: map[uint16][]pointerPage{}, tipCache: map[uint32][]byte{},
 		seqPages: map[uint16]map[uint32]uint32{},
+		pageScan: rep, pageSeq: map[uint32]relSeq{}, dataPages: map[uint16][]uint32{}, dataErr: map[uint16]error{},
+	}
+	for rel, dps := range rep.DataPages {
+		for _, d := range dps {
+			c.pageSeq[d.Page] = relSeq{rel, d.Seq}
+		}
 	}
 	if err := c.loadPages(); err != nil {
 		return nil, fmt.Errorf("RDB$PAGES: %w", err)
@@ -99,16 +134,21 @@ func (c *Catalog) loadPages() error {
 	buf := make([]byte, c.db.PageSize)
 	seen := map[uint32]bool{}
 	var seq uint32
+	// A break in the chain is not fatal: DataPages finds the rest of the
+	// data pages of RDB$PAGES by scanning.
 	for p := c.db.Header.PagesPointer; p != 0; seq++ {
 		if seen[p] {
-			return fmt.Errorf("pointer page chain loops at page %d", p)
+			c.warn("RDB$PAGES: pointer page chain loops at page %d", p)
+			break
 		}
 		seen[p] = true
 		if err := c.db.ReadPage(p, buf); err != nil {
-			return err
+			c.warn("RDB$PAGES: %v", err)
+			break
 		}
 		if buf[0] != fdb.TypePointer || le.Uint16(buf[0x1A:]) != relPages {
-			return fmt.Errorf("page %d should be a pointer page of RDB$PAGES", p)
+			c.warn("RDB$PAGES: page %d should be a pointer page of RDB$PAGES", p)
+			break
 		}
 		c.pointers[relPages] = append(c.pointers[relPages], pointerPage{seq, p})
 		p = le.Uint32(buf[0x14:])
@@ -149,10 +189,17 @@ func (c *Catalog) loadPages() error {
 	slices.SortFunc(tips, func(a, b tip) int { return cmp.Compare(a.seq, b.seq) })
 	for i, t := range tips {
 		if t.seq != uint32(i) {
-			c.warn("transaction inventory page %d is missing; transactions it covers are treated as not committed", i)
 			break
 		}
 		c.tips = append(c.tips, t.page)
+	}
+	if len(c.tips) < len(tips) || len(tips) == 0 {
+		if len(c.pageScan.TIPPages) > len(c.tips) {
+			c.warn("RDB$PAGES lists %d of the transaction inventory pages; the chain of %d found by scanning is used", len(c.tips), len(c.pageScan.TIPPages))
+			c.tips = c.pageScan.TIPPages
+		} else {
+			c.warn("transaction inventory page %d is missing", len(c.tips))
+		}
 	}
 	return nil
 }
@@ -312,6 +359,7 @@ func (c *Catalog) loadTables(formats map[formatKey]*Format) error {
 		return fmt.Errorf("RDB$RELATION_FIELDS: %w", err)
 	}
 
+	rels = append(rels, c.lostRelations(rels, formats)...)
 	slices.SortFunc(rels, func(a, b relation) int { return cmp.Compare(a.id, b.id) })
 	for _, r := range rels {
 		if !r.regular {
@@ -340,6 +388,7 @@ func (c *Catalog) loadTables(formats map[formatKey]*Format) error {
 			c.setDefault(col, cur, rf)
 			t.Columns = append(t.Columns, col)
 		}
+		c.lostColumns(t, cur)
 		c.Tables = append(c.Tables, t)
 	}
 	return nil
@@ -433,4 +482,55 @@ func parseLiteral(b []byte) (any, error) {
 		return nil, bad
 	}
 	return value.DecodeBytes(raw, f, value.Options{})
+}
+
+// lostRelations makes up tables for relations that have record formats and
+// data pages but no row in RDB$RELATIONS: lost to damage, since the engine
+// deletes the formats and the data of a dropped table.
+func (c *Catalog) lostRelations(rels []relation, formats map[formatKey]*Format) []relation {
+	known := map[uint16]bool{}
+	for _, r := range rels {
+		known[r.id] = true
+	}
+	latest := map[uint16]uint16{}
+	for k := range formats {
+		if k.rel >= firstUserRelation && !known[k.rel] && k.format >= latest[k.rel] {
+			latest[k.rel] = k.format
+		}
+	}
+	var out []relation
+	for id, f := range latest {
+		if len(c.pageScan.DataPages[id]) == 0 && len(c.pointers[id]) == 0 {
+			continue // a view or a temporary table: nothing to export
+		}
+		r := relation{id: id, name: fmt.Sprintf("TABLE_%d", id), format: f, regular: true}
+		c.warn("table %d is missing from RDB$RELATIONS but has data: exported as %s, with its newest format (%d)", id, r.name, f)
+		out = append(out, r)
+	}
+	return out
+}
+
+// firstUserRelation is the relation id of the first user table.
+const firstUserRelation = 128
+
+// lostColumns adds columns for stored fields of the current format that
+// RDB$RELATION_FIELDS does not name, as FIELD_<id>.
+func (c *Catalog) lostColumns(t *Table, cur *Format) {
+	named := map[int]bool{}
+	for _, col := range t.Columns {
+		named[col.Field.ID] = true
+	}
+	var lost []string
+	for _, f := range cur.Fields {
+		if !f.Stored() || named[f.ID] {
+			continue
+		}
+		col := &Column{Name: fmt.Sprintf("FIELD_%d", f.ID), Position: len(t.Columns), Field: f}
+		t.Columns = append(t.Columns, col)
+		lost = append(lost, col.Name)
+	}
+	if len(lost) > 0 {
+		c.warn("table %s: %d columns are missing from RDB$RELATION_FIELDS and are exported as %s; their names, order and defaults are lost",
+			t.Name, len(lost), strings.Join(lost, ", "))
+	}
 }

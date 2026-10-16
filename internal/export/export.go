@@ -254,7 +254,7 @@ func exportTable(cat *meta.Catalog, t *meta.Table, opt Options, tr *TableResult,
 	raw := map[string]int{}     // column -> values not valid UTF-8
 	noDflt := map[string]int{}  // column -> rows whose default could not be evaluated
 	colErrs := map[string]int{} // column -> values left NULL after an error
-	var uncommitted, older, limbo, deletedGone int
+	var uncommitted, older, limbo, deletedGone, unknownTx int
 	vals := make([]any, len(cols))
 	logAt := func(page uint32, line int, column, reason string) error {
 		e := ErrorLine{Table: t.Name, Page: page, Column: column, Reason: reason}
@@ -321,6 +321,9 @@ func exportTable(cat *meta.Catalog, t *meta.Table, opt Options, tr *TableResult,
 		if r.Limbo {
 			limbo++
 		}
+		if r.Unknown {
+			unknownTx++
+		}
 		if r.Deleted {
 			if !opt.IncludeDeleted {
 				return nil
@@ -363,7 +366,7 @@ func exportTable(cat *meta.Catalog, t *meta.Table, opt Options, tr *TableResult,
 	if err != nil {
 		return err
 	}
-	tr.Warned = len(raw) > 0 || len(noDflt) > 0 || len(colErrs) > 0 || limbo > 0
+	tr.Warned = len(raw) > 0 || len(noDflt) > 0 || len(colErrs) > 0 || limbo > 0 || unknownTx > 0
 	for c, n := range raw {
 		res.Warnings = append(res.Warnings, fmt.Sprintf("%s.%s: %d values are not valid UTF-8 and were written unchanged; for CHARACTER SET NONE data try --charset", t.Name, c, n))
 	}
@@ -375,6 +378,9 @@ func exportTable(cat *meta.Catalog, t *meta.Table, opt Options, tr *TableResult,
 	}
 	if limbo > 0 {
 		res.Warnings = append(res.Warnings, fmt.Sprintf("%s: %d rows have changes by limbo (prepared) transactions; their last committed version was written", t.Name, limbo))
+	}
+	if unknownTx > 0 {
+		res.Warnings = append(res.Warnings, fmt.Sprintf("%s: for %d rows the transaction inventory is damaged and does not say whether the newest version committed; it was taken as committed", t.Name, unknownTx))
 	}
 	if blobs.n > 0 {
 		res.Notes = append(res.Notes, fmt.Sprintf("%s: %d blobs over %d MB are in %s/ (NULL in the SQL file)", t.Name, blobs.n, blobInlineLimit>>20, blobs.rel))

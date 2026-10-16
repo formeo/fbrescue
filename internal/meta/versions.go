@@ -16,6 +16,7 @@ type Row struct {
 	Deleted bool   // the version is a delete stub: the row was deleted
 	Older   bool   // newer versions exist but did not commit
 	Limbo   bool   // a newer version belongs to a limbo (prepared) transaction
+	Unknown bool   // the transaction inventory does not say whether the version committed: taken as committed
 }
 
 const maxVersions = 1 << 16
@@ -52,7 +53,11 @@ func (c *Catalog) committedFrom(r Row) (Row, bool, error) {
 		if r.Header.Tx != 0 {
 			s, err := c.TxState(r.Header.Tx)
 			if err != nil {
-				return Row{}, false, err
+				// Transactions older than the oldest interesting one all
+				// committed. For newer ones the newest version is the best
+				// guess: most transactions commit.
+				r.Older, r.Limbo, r.Unknown = older, limbo, uint64(r.Header.Tx) >= c.db.Header.OIT
+				return r, true, nil
 			}
 			if s == TxCommitted {
 				r.Older, r.Limbo = older, limbo

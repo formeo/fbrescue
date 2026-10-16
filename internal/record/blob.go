@@ -67,6 +67,9 @@ func (r *Reader) Blob(id BlobID, seqPage func(seq uint32) (uint32, bool)) ([]byt
 		if buf[0] != fdb.TypeBlob {
 			return nil, fmt.Errorf("page %d is not a blob page", bp)
 		}
+		if err := r.db.CheckNumber(bp, buf); err != nil {
+			return nil, err
+		}
 		n := int(le.Uint16(buf[blpLength:]))
 		if blpDataOffset+n > len(buf) {
 			return nil, fmt.Errorf("blob page %d claims %d bytes", bp, n)

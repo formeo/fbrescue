@@ -23,6 +23,18 @@ type Report struct {
 	Transactions *Transactions     `json:"transactions,omitempty"`
 	Relations    []Relation        `json:"relations"`
 	Problems     []Problem         `json:"problems"`
+
+	// For export when the page structure is damaged: data pages in use by
+	// relation, wherever they are listed, and the TIP pages in chain order.
+	DataPages map[uint16][]DataPage `json:"-"`
+	TIPPages  []uint32              `json:"-"`
+	Misplaced map[uint32][]uint32   `json:"-"` // ODS 12+: page number -> locations holding that page
+}
+
+// DataPage is a data page in use, as found by reading it.
+type DataPage struct {
+	Page, Seq uint32
+	Unlisted  bool // holds only fragments of large records; never in a pointer page
 }
 
 // Transactions counts transaction states recorded in the TIP for
@@ -107,7 +119,8 @@ type scanner struct {
 func Run(db *fdb.File, progress func(done, total uint32)) *Report {
 	s := &scanner{
 		db:   db,
-		r:    &Report{Pages: db.Pages, PageTypes: map[string]uint32{}, Relations: []Relation{}, Problems: []Problem{}},
+		r: &Report{Pages: db.Pages, PageTypes: map[string]uint32{}, Relations: []Relation{}, Problems: []Problem{},
+			DataPages: map[uint16][]DataPage{}, Misplaced: map[uint32][]uint32{}},
 		data: make([]dataPage, db.Pages),
 		ptrs: map[uint16][]pointerPage{},
 		tips: map[uint32]uint32{},
@@ -171,6 +184,7 @@ func (s *scanner) page(p uint32) {
 	}
 	if s.db.Family == fdb.ODS12Plus && fdb.PageNumber(b) != p {
 		s.problem(p, WrongPageNumber, "page holds the contents of page %d", fdb.PageNumber(b))
+		s.r.Misplaced[fdb.PageNumber(b)] = append(s.r.Misplaced[fdb.PageNumber(b)], p)
 		return
 	}
 	s.r.PageTypes[typeName(t)]++
@@ -286,7 +300,12 @@ func (s *scanner) link() {
 		s.r.Relations = append(s.r.Relations, r)
 	}
 	for p := range s.data {
-		if d := s.data[p]; d.isData && !d.referenced && !d.unlisted {
+		d := s.data[p]
+		if !d.isData {
+			continue
+		}
+		s.r.DataPages[d.rel] = append(s.r.DataPages[d.rel], DataPage{Page: uint32(p), Seq: d.seq, Unlisted: d.unlisted})
+		if !d.referenced && !d.unlisted {
 			s.problem(uint32(p), OrphanDataPage, "data page of table %d is not referenced by any pointer page", d.rel)
 		}
 	}
@@ -330,10 +349,6 @@ func (s *scanner) linkSlots(r *Relation, pp pointerPage) {
 // transactions follows the TIP chain and counts transaction states,
 // two bits per transaction starting at offset 0x14.
 func (s *scanner) transactions() {
-	h := s.db.Header
-	if h == nil {
-		return
-	}
 	pointed := map[uint32]bool{}
 	for _, next := range s.tips {
 		pointed[next] = true
@@ -360,6 +375,11 @@ func (s *scanner) transactions() {
 		}
 		seen[p] = true
 		chain = append(chain, p)
+	}
+	s.r.TIPPages = chain
+	h := s.db.Header
+	if h == nil {
+		return
 	}
 
 	per := uint64(s.db.PageSize-0x14) * 4
