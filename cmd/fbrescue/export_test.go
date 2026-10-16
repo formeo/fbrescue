@@ -505,3 +505,71 @@ func TestExportWithDDL(t *testing.T) {
 		})
 	}
 }
+
+// TestAllVersions: --versions all writes each row's version chain as
+// versions.sql left it (see tools/mkcorpus/sql/versions.sql), newest first.
+func TestAllVersions(t *testing.T) {
+	want := map[string][]string{ // ID -> versions as "state/deleted/V"
+		"1": {"committed/0/one c"},
+		"2": {"rolled back/0/two rolled back", "committed/0/two"},
+		"3": {"rolled back/0/three rolled back again", "committed/0/three"},
+		"4": {"rolled back/1/", "committed/0/four"},
+		"6": {"rolled back/0/six never committed"},
+		"7": {"rolled back/0/seven rolled back", "committed/0/seven committed"},
+		"8": {"rolled back/0/" + strings.Repeat("x", 60), "committed/0/eight"},
+	}
+	for _, db := range corpus.List(t) {
+		if db.Name != "versions" {
+			continue
+		}
+		t.Run(db.Engine, func(t *testing.T) {
+			dir := t.TempDir()
+			var out, errOut bytes.Buffer
+			if code := run([]string{"export", "--versions", "all", "--out", dir, db.Path}, &out, &errOut); code != 0 {
+				t.Fatalf("exit %d: %s%s", code, out.String(), errOut.String())
+			}
+			b, _ := os.ReadFile(filepath.Join(dir, "VERS.versions.csv"))
+			recs, err := csv.NewReader(bytes.NewReader(b)).ReadAll()
+			if err != nil || len(recs) < 2 || strings.Join(recs[0], ",") != "_PAGE,_LINE,_VERSION,_TRANSACTION,_STATE,_DELETED,ID,V,N" {
+				t.Fatalf("versions file: %v\n%s", err, b)
+			}
+			chains := map[string][]string{} // page:line -> versions
+			ids := map[string]string{}      // page:line -> ID
+			for _, r := range recs[1:] {
+				key := r[0] + ":" + r[1]
+				if r[2] != strconv.Itoa(len(chains[key])) {
+					t.Errorf("%s: version %s out of order", key, r[2])
+				}
+				chains[key] = append(chains[key], r[4]+"/"+r[5]+"/"+r[7])
+				if r[6] != "" {
+					ids[key] = r[6]
+				}
+			}
+			got := map[string][]string{}
+			for key, c := range chains {
+				got[ids[key]] = c
+			}
+			for id, w := range want {
+				if strings.Join(got[id], " | ") != strings.Join(w, " | ") {
+					t.Errorf("ID %s: got %q, want %q", id, got[id], w)
+				}
+			}
+			if len(got) != len(want) {
+				t.Errorf("%d rows with versions, want %d: %q", len(got), len(want), got)
+			}
+
+			// The SQL form creates its own table and loads.
+			sqlDir := filepath.Join(dir, "sql")
+			if code := run([]string{"export", "--format", "sql", "--versions", "all", "--out", sqlDir, db.Path}, &out, &errOut); code != 0 {
+				t.Fatalf("sql: exit %d", code)
+			}
+			newDB := filepath.Join(dir, "new.fdb")
+			fbTool(t, db.Engine, "create database '"+newDB+"' default character set utf8; quit;", "isql", "-q")
+			fbTool(t, db.Engine, "", "isql", "-q", "-b", "-ch", "UTF8", "-i", filepath.Join(sqlDir, "VERS.versions.sql"), newDB)
+			n := fbTool(t, db.Engine, `set list on; select count(*) from "VERS_VERSIONS"; quit;`, "isql", "-q", newDB)
+			if !strings.Contains(n, strconv.Itoa(len(recs)-1)) {
+				t.Errorf("VERS_VERSIONS holds %s, want %d rows", strings.TrimSpace(n), len(recs)-1)
+			}
+		})
+	}
+}

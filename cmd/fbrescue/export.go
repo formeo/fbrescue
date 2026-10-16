@@ -93,7 +93,7 @@ func runTables(a cliArgs, stdout, stderr io.Writer) int {
 }
 
 func runExport(a cliArgs, stdout, stderr io.Writer) int {
-	opt := export.Options{Format: a.format, Dir: a.out, Tables: a.tables, IncludeDeleted: a.includeDeleted}
+	opt := export.Options{Format: a.format, Dir: a.out, Tables: a.tables, IncludeDeleted: a.includeDeleted, AllVersions: a.versions == "all"}
 	if a.charset != "" {
 		id, ok := value.CharsetByName(a.charset)
 		if !ok || !value.Decodable(id) {
@@ -125,6 +125,9 @@ func runExport(a cliArgs, stdout, stderr io.Writer) int {
 		}
 		if t.Deleted > 0 {
 			fmt.Fprintf(stdout, " + %d deleted rows in %s", t.Deleted, t.DeletedFile)
+		}
+		if t.VersionsFile != "" {
+			fmt.Fprintf(stdout, " + %d versions in %s", t.Versions, t.VersionsFile)
 		}
 		fmt.Fprintln(stdout)
 	}

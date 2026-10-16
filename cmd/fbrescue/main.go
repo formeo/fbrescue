@@ -30,20 +30,21 @@ Options:
   --table NAME                export: only this table; repeat for more
   --charset NAME              export: decode CHARACTER SET NONE text as NAME, e.g. WIN1251
   --include-deleted           export: also write deleted rows still on disk, to <table>.deleted.<format>
+  --versions all              export: also write every record version still on disk, with its
+                              transaction and state, to <table>.versions.<format>
   --ddl FILE                  export, tables: CREATE TABLE statements for tables whose definition
                               is lost from the database (e.g. a schema.sql of an earlier export)
 
   page    <db> <N>            decode one page: header, pointer slots, records and their values
 
-Planned:
-  report  <db>                anonymized diagnostic report for bug reports
+  report  <db>                diagnostic report to attach to a bug report, as JSON: the
+                              database structure and the problems found, no data, names
+                              replaced by numbers
 
   version                     print the version
 
 Exit status: 0 ok, 1 error, 2 problems found (scan) or data left out (export).
 `
-
-var planned = map[string]bool{"report": true}
 
 func main() {
 	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
@@ -62,7 +63,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	case cmd == "version":
 		fmt.Fprintln(stdout, "fbrescue", version)
 		return 0
-	case cmd == "info" || cmd == "scan" || cmd == "tables" || cmd == "export" || cmd == "page":
+	case cmd == "info" || cmd == "scan" || cmd == "tables" || cmd == "export" || cmd == "page" || cmd == "report":
 		a, err := parseArgs(cmd, rest)
 		if err != nil {
 			fmt.Fprintf(stderr, "fbrescue %s: %v\n", cmd, err)
@@ -77,11 +78,10 @@ func run(args []string, stdout, stderr io.Writer) int {
 			return runTables(a, stdout, stderr)
 		case "page":
 			return runPage(a, stdout, stderr)
+		case "report":
+			return runReport(a, stdout, stderr)
 		}
 		return runExport(a, stdout, stderr)
-	case planned[cmd]:
-		fmt.Fprintf(stderr, "fbrescue %s: not implemented yet\n", cmd)
-		return 1
 	default:
 		fmt.Fprintf(stderr, "fbrescue: unknown command %q\n\n%s", cmd, usage)
 		return 1
@@ -96,6 +96,7 @@ type cliArgs struct {
 	format         string
 	charset        string
 	ddl            string
+	versions       string
 	tables         []string
 	pageNo         string // page: the page number
 }
@@ -104,7 +105,7 @@ type cliArgs struct {
 // as --name value or --name=value.
 func parseArgs(cmd string, in []string) (cliArgs, error) {
 	a := cliArgs{format: "csv"}
-	valued := map[string]*string{"out": &a.out, "format": &a.format, "charset": &a.charset, "ddl": &a.ddl, "table": nil}
+	valued := map[string]*string{"out": &a.out, "format": &a.format, "charset": &a.charset, "ddl": &a.ddl, "versions": &a.versions, "table": nil}
 	var paths []string
 	for i := 0; i < len(in); i++ {
 		arg := in[i]
@@ -154,6 +155,9 @@ func parseArgs(cmd string, in []string) (cliArgs, error) {
 		}
 		if a.format != "csv" && a.format != "sql" && a.format != "jsonl" {
 			return a, fmt.Errorf("unknown format %q: use csv, sql or jsonl", a.format)
+		}
+		if a.versions != "" && a.versions != "all" && a.versions != "visible" {
+			return a, fmt.Errorf("unknown --versions %q: use all or visible", a.versions)
 		}
 	}
 	return a, nil

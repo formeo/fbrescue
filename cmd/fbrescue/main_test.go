@@ -48,7 +48,8 @@ func TestNeverWrites(t *testing.T) {
 
 			out := t.TempDir()
 			for _, args := range [][]string{{"info", path}, {"info", "--json", path}, {"scan", path}, {"scan", "--json", path},
-				{"tables", path}, {"page", path, "1"}, {"page", "--json", path, "0"}, {"export", "--format", "sql", "--out", out, path}} {
+				{"tables", path}, {"page", path, "1"}, {"page", "--json", path, "0"}, {"report", path}, {"export", "--format", "sql", "--out", out, path},
+				{"export", "--versions", "all", "--include-deleted", "--out", out, path}} {
 				var out, errOut bytes.Buffer
 				code := run(args, &out, &errOut)
 				// tables and export need an intact header and system tables:

@@ -107,3 +107,22 @@ func (c *Catalog) back(r Row) (Row, error) {
 	}
 	return Row{Page: p, Line: l, Header: h, Data: data, Deleted: deleted}, nil
 }
+
+// Chain returns every version of the row whose primary version is v, newest
+// first, as far as the chain can be read; err tells why it stops early.
+func (c *Catalog) Chain(v Version, rec []byte) ([]Row, error) {
+	r := Row{Page: v.Page, Line: v.Line, Header: v.Header, Data: rec, Deleted: v.Header.Flags&record.FlagDeleted != 0}
+	out := []Row{r}
+	for r.Header.BackPage != 0 {
+		if len(out) > maxVersions {
+			return out, errors.New("version chain does not end")
+		}
+		next, err := c.back(r)
+		if err != nil {
+			return out, err
+		}
+		out = append(out, next)
+		r = next
+	}
+	return out, nil
+}
