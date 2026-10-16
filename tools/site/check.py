@@ -56,6 +56,8 @@ def main(site):
     errors, pages = [], {}
     for f in sorted(site.rglob("*.html")):
         text = f.read_text(encoding="utf-8")
+        if text.startswith("google-site-verification:"):
+            continue  # Search Console ownership file, served as is
         p = Page()
         p.feed(text)
         pages[f] = p
