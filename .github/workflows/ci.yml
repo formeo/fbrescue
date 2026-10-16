@@ -4,6 +4,10 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_call: # from release.yml: a version is released only if all tests pass
+
+permissions:
+  contents: read
 
 jobs:
   test:
