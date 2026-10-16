@@ -64,6 +64,8 @@ def main(site):
             errors.append(f"{rel}: Liquid left unrendered")
         if not p.title.strip() or not p.description.strip():
             errors.append(f"{rel}: no title or description")
+        if not p.alternates:
+            errors.append(f"{rel}: no hreflang links (every page has a translation; is the front matter valid?)")
         if p.lang != p_lang(f, site):
             errors.append(f"{rel}: <html lang> is {p.lang!r}, the page is in {p_lang(f, site)}")
     for f, p in pages.items():
