@@ -23,6 +23,7 @@ type Options struct {
 	Dir            string   // output directory, created if missing
 	Tables         []string // export only these tables (exact names); all if empty
 	IncludeDeleted bool     // also write deleted rows still on disk, to <table>.deleted.<format>
+	AllVersions    bool     // also write every record version on disk, to <table>.versions.<format>
 	Value          value.Options
 }
 
@@ -36,14 +37,16 @@ type Result struct {
 
 // TableResult summarizes one table.
 type TableResult struct {
-	Name        string   `json:"name"`
-	File        string   `json:"file"`
-	Rows        int      `json:"rows"`
-	Skipped     int      `json:"skipped"` // rows that exist but could not be exported
-	Warned      bool     `json:"warned"`  // some values may be wrong: see the warnings
-	Omitted     []string `json:"omitted_columns,omitempty"`
-	Deleted     int      `json:"deleted,omitempty"` // with IncludeDeleted
-	DeletedFile string   `json:"deleted_file,omitempty"`
+	Name         string   `json:"name"`
+	File         string   `json:"file"`
+	Rows         int      `json:"rows"`
+	Skipped      int      `json:"skipped"` // rows that exist but could not be exported
+	Warned       bool     `json:"warned"`  // some values may be wrong: see the warnings
+	Omitted      []string `json:"omitted_columns,omitempty"`
+	Deleted      int      `json:"deleted,omitempty"` // with IncludeDeleted
+	DeletedFile  string   `json:"deleted_file,omitempty"`
+	Versions     int      `json:"versions,omitempty"` // with AllVersions
+	VersionsFile string   `json:"versions_file,omitempty"`
 }
 
 // Partial reports whether some data could not be exported.
@@ -90,7 +93,10 @@ func Run(cat *meta.Catalog, opt Options, progress func(*TableResult)) (*Result, 
 	if err := os.MkdirAll(opt.Dir, 0o755); err != nil {
 		return nil, err
 	}
-	res := &Result{Tables: []*TableResult{}, Warnings: append([]string{}, cat.Warnings...), Notes: []string{}}
+	res := &Result{Tables: []*TableResult{}, Warnings: []string{}, Notes: []string{}}
+	// The catalog adds warnings while tables are read (pages found by
+	// scanning): they go first, once all tables are done.
+	defer func() { res.Warnings = append(append([]string{}, cat.Warnings...), res.Warnings...) }()
 
 	schema, err := os.Create(filepath.Join(opt.Dir, "schema.sql"))
 	if err != nil {
@@ -244,17 +250,33 @@ func exportTable(cat *meta.Catalog, t *meta.Table, opt Options, tr *TableResult,
 		return err
 	}
 	defer out.f.Close()
-	var deleted *output
+	var deleted, versions *output
 	defer func() {
 		if deleted != nil {
 			deleted.f.Close()
 		}
+		if versions != nil {
+			versions.f.Close()
+		}
 	}()
+	if opt.AllVersions {
+		vt := versionsTable(t, cols)
+		tr.VersionsFile = base + ".versions." + opt.Format
+		vblobs := &blobFiles{dir: filepath.Join(opt.Dir, base+".versions.blobs"), rel: base + ".versions.blobs"}
+		if versions, err = openOutput(filepath.Join(opt.Dir, tr.VersionsFile), opt.Format, vt, vt.Columns, vblobs); err != nil {
+			return err
+		}
+		if opt.Format == "sql" {
+			if err := WriteSchema(versions.bw, []*meta.Table{vt}); err != nil {
+				return err
+			}
+		}
+	}
 
 	raw := map[string]int{}     // column -> values not valid UTF-8
 	noDflt := map[string]int{}  // column -> rows whose default could not be evaluated
 	colErrs := map[string]int{} // column -> values left NULL after an error
-	var uncommitted, older, limbo, deletedGone int
+	var uncommitted, older, limbo, deletedGone, unknownTx int
 	vals := make([]any, len(cols))
 	logAt := func(page uint32, line int, column, reason string) error {
 		e := ErrorLine{Table: t.Name, Page: page, Column: column, Reason: reason}
@@ -272,7 +294,10 @@ func exportTable(cat *meta.Catalog, t *meta.Table, opt Options, tr *TableResult,
 	// as rowErr, column-level ones leave the column NULL and are logged.
 	values := func(r meta.Row) (rowErr string, err error) {
 		fm, ok := t.Formats[uint16(r.Header.Format)]
-		if !ok {
+		switch {
+		case !ok && t.FromDDL:
+			return fmt.Sprintf("record format %d: the layout from the DDL is for format %d, the newest", r.Header.Format, t.CurrentFormat), nil
+		case !ok:
 			return fmt.Sprintf("record format %d is not in RDB$FORMATS", r.Header.Format), nil
 		}
 		for i, c := range cols {
@@ -307,6 +332,11 @@ func exportTable(cat *meta.Catalog, t *meta.Table, opt Options, tr *TableResult,
 		case v.Header.Flags&record.FlagDamaged != 0:
 			return skip(v.Page, v.Line, "record is marked damaged by the engine")
 		}
+		if versions != nil {
+			if err := writeVersions(cat, v, rec, versions, values, vals, tr, logAt); err != nil {
+				return err
+			}
+		}
 		r, found, err := cat.Current(v, rec)
 		switch {
 		case err != nil:
@@ -320,6 +350,9 @@ func exportTable(cat *meta.Catalog, t *meta.Table, opt Options, tr *TableResult,
 		}
 		if r.Limbo {
 			limbo++
+		}
+		if r.Unknown {
+			unknownTx++
 		}
 		if r.Deleted {
 			if !opt.IncludeDeleted {
@@ -363,7 +396,7 @@ func exportTable(cat *meta.Catalog, t *meta.Table, opt Options, tr *TableResult,
 	if err != nil {
 		return err
 	}
-	tr.Warned = len(raw) > 0 || len(noDflt) > 0 || len(colErrs) > 0 || limbo > 0
+	tr.Warned = len(raw) > 0 || len(noDflt) > 0 || len(colErrs) > 0 || limbo > 0 || unknownTx > 0
 	for c, n := range raw {
 		res.Warnings = append(res.Warnings, fmt.Sprintf("%s.%s: %d values are not valid UTF-8 and were written unchanged; for CHARACTER SET NONE data try --charset", t.Name, c, n))
 	}
@@ -375,6 +408,9 @@ func exportTable(cat *meta.Catalog, t *meta.Table, opt Options, tr *TableResult,
 	}
 	if limbo > 0 {
 		res.Warnings = append(res.Warnings, fmt.Sprintf("%s: %d rows have changes by limbo (prepared) transactions; their last committed version was written", t.Name, limbo))
+	}
+	if unknownTx > 0 {
+		res.Warnings = append(res.Warnings, fmt.Sprintf("%s: for %d rows the transaction inventory is damaged and does not say whether the newest version committed; it was taken as committed", t.Name, unknownTx))
 	}
 	if blobs.n > 0 {
 		res.Notes = append(res.Notes, fmt.Sprintf("%s: %d blobs over %d MB are in %s/ (NULL in the SQL file)", t.Name, blobs.n, blobInlineLimit>>20, blobs.rel))
@@ -393,6 +429,12 @@ func exportTable(cat *meta.Catalog, t *meta.Table, opt Options, tr *TableResult,
 			return err
 		}
 		deleted = nil
+	}
+	if versions != nil {
+		if err := versions.close(); err != nil {
+			return err
+		}
+		versions = nil
 	}
 	return out.close()
 }
@@ -464,7 +506,9 @@ func WriteSchema(w io.Writer, tables []*meta.Table) error {
 			ok, why := Exported(c)
 			switch {
 			case c.Computed:
-				lines = append(lines, fmt.Sprintf("  -- %s COMPUTED BY (...): expression not recovered", quote(c.Name)))
+				// The column keeps its place, so that its field id stays
+				// that of the stored records (this file also works as --ddl).
+				lines = append(lines, fmt.Sprintf("  %s COMPUTED BY (CAST(NULL AS %s)) -- the expression is not stored with the data", quote(c.Name), c.Field.SQLType()))
 			case !ok:
 				lines = append(lines, fmt.Sprintf("  %s %s -- %s", quote(c.Name), c.Field.SQLType(), why))
 			default:

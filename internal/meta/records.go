@@ -1,6 +1,7 @@
 package meta
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/formeo/fbrescue/internal/fdb"
@@ -14,21 +15,31 @@ type Version struct {
 	Header record.Header
 }
 
-// DataPages returns the data pages of a relation in sequence order, as
-// listed by its pointer pages.
+// DataPages returns the data pages of a relation: in sequence order as
+// listed by its pointer pages, then any data pages of the relation that are
+// in use but not listed, for sequence numbers the pointer pages do not
+// cover (their pointer page is damaged or lost). The error reports damaged
+// pointer pages; the pages returned are still usable.
 func (c *Catalog) DataPages(rel uint16) ([]uint32, error) {
+	if out, ok := c.dataPages[rel]; ok {
+		return out, c.dataErr[rel]
+	}
 	var out []uint32
+	var errs []error
 	buf := make([]byte, c.db.PageSize)
 	for _, pp := range c.pointers[rel] {
 		if err := c.db.ReadPage(pp.page, buf); err != nil {
-			return out, err
+			errs = append(errs, err)
+			continue
 		}
 		if buf[0] != fdb.TypePointer || le.Uint16(buf[0x1A:]) != rel {
-			return out, fmt.Errorf("page %d should be pointer page %d of relation %d", pp.page, pp.seq, rel)
+			errs = append(errs, fmt.Errorf("page %d should be pointer page %d of relation %d", pp.page, pp.seq, rel))
+			continue
 		}
 		n := int(le.Uint16(buf[0x18:]))
 		if 0x20+4*n > len(buf) {
-			return out, fmt.Errorf("pointer page %d claims %d slots", pp.page, n)
+			errs = append(errs, fmt.Errorf("pointer page %d claims %d slots", pp.page, n))
+			continue
 		}
 		for i := 0; i < n; i++ {
 			if p := le.Uint32(buf[0x20+4*i:]); p != 0 {
@@ -36,7 +47,26 @@ func (c *Catalog) DataPages(rel uint16) ([]uint32, error) {
 			}
 		}
 	}
-	return out, nil
+
+	listed, covered := map[uint32]bool{}, map[uint32]bool{}
+	for _, p := range out {
+		listed[p] = true
+		if rs, ok := c.pageSeq[p]; ok && rs.rel == rel {
+			covered[rs.seq] = true
+		}
+	}
+	found := 0
+	for _, d := range c.pageScan.DataPages[rel] {
+		if !d.Unlisted && !listed[d.Page] && !covered[d.Seq] {
+			out = append(out, d.Page)
+			found++
+		}
+	}
+	if found > 0 {
+		c.warn("relation %d: %d data pages not reachable through its pointer pages were found by scanning the file", rel, found)
+	}
+	c.dataPages[rel], c.dataErr[rel] = out, errors.Join(errs...)
+	return out, c.dataErr[rel]
 }
 
 // Records calls fn for every primary record version of relation rel (delete
@@ -58,7 +88,7 @@ func (c *Catalog) Records(rel uint16, fn func(v Version, rec []byte, err error) 
 			if err := fn(Version{Page: p, Line: -1}, nil, err); err != nil {
 				return err
 			}
-			if slots == nil {
+			if slots == nil || prel != rel {
 				continue
 			}
 		}
@@ -144,13 +174,12 @@ func (c *Catalog) Blob(id record.BlobID) ([]byte, error) {
 	m, ok := c.seqPages[id.Relation]
 	if !ok {
 		m = map[uint32]uint32{}
-		pages, err := c.DataPages(id.Relation)
-		if err != nil {
-			return nil, err
-		}
+		// Damaged pointer pages are reported where the table's rows are
+		// read; the pages found are still the ones to look in.
+		pages, _ := c.DataPages(id.Relation)
 		for _, p := range pages {
-			_, seq, _, err := c.rd.DataPage(p)
-			if err != nil {
+			rel, seq, _, err := c.rd.DataPage(p)
+			if err != nil || rel != id.Relation {
 				continue
 			}
 			m[seq] = p

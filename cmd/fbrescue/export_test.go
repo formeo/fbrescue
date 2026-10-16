@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/csv"
 	"encoding/hex"
 	"encoding/json"
@@ -9,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -98,7 +100,7 @@ func exportedTables(t *testing.T, path string) []exportedTable {
 // for value, in the engine's own formatting.
 func TestExportRoundTrip(t *testing.T) {
 	roundTrip := map[string]bool{"base": true, "deleted": true, "readonly": true, "types": true, "layout": true, "manytx": true,
-		"versions": true, "blobs": true, "fb4types": true}
+		"versions": true, "blobs": true, "fb4types": true, "shop": true}
 	for _, db := range corpus.List(t) {
 		if !roundTrip[db.Name] {
 			continue
@@ -140,7 +142,11 @@ func TestExportRoundTrip(t *testing.T) {
 				if tb.name == "BL" { // blobs over 1 MB go to files, not the SQL: see TestExportBlobFiles
 					where = " where id not in (5, 8)"
 				}
-				q := "set list on; select " + strings.Join(tb.cols, ", ") + ` from "` + tb.name + `"` + where + " order by 1; quit;"
+				order := " order by 1"
+				if tb.name == "ITEMS" { // primary key (order_id, line)
+					order = " order by 1, 2"
+				}
+				q := "set list on; select " + strings.Join(tb.cols, ", ") + ` from "` + tb.name + `"` + where + order + "; quit;"
 				want := fbTool(t, db.Engine, q, "isql", "-q", "-ch", "UTF8", orig)
 				got := fbTool(t, db.Engine, q, "isql", "-q", "-ch", "UTF8", newDB)
 				if got != want {
@@ -439,6 +445,130 @@ func TestIncludeDeleted(t *testing.T) {
 				if id, _ := strconv.Atoi(r[0]); id%4 != 0 || r[1] != "Row "+r[0] {
 					t.Errorf("deleted row %v", r)
 				}
+			}
+		})
+	}
+}
+
+// TestExportWithDDL: with the data pages of system tables zeroed, --ddl
+// with the script that created the database brings back exactly the
+// intact export: matched by name (RDB$FORMATS lost), by record length
+// (RDB$FORMATS and RDB$RELATIONS lost), or by layout (RDB$RELATIONS lost:
+// without --ddl the tables come out as TABLE_<id> with FIELD_<n> columns).
+func TestExportWithDDL(t *testing.T) {
+	script, err := os.ReadFile("../../tools/mkcorpus/sql/shop.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ddlPath := filepath.Join(t.TempDir(), "shop.sql")
+	os.WriteFile(ddlPath, append([]byte("/* CREATE DATABASE 'shop.fdb' DEFAULT CHARACTER SET UTF8; */\n"), script...), 0o644)
+	tables := []string{"CUSTOMERS", "ORDERS", "ITEMS"}
+	for _, db := range corpus.List(t) {
+		if db.Name != "shop" {
+			continue
+		}
+		t.Run(db.Engine, func(t *testing.T) {
+			want := t.TempDir()
+			var out, errOut bytes.Buffer
+			if code := run([]string{"export", "--out", want, db.Path}, &out, &errOut); code != 0 {
+				t.Fatalf("intact: exit %d: %s", code, errOut.String())
+			}
+			for _, lost := range [][]uint16{{8}, {6, 8}, {6}} {
+				orig, _ := os.ReadFile(db.Path)
+				ps := int(binary.LittleEndian.Uint16(orig[0x10:]))
+				zeroed := 0
+				for p := 1; (p+1)*ps <= len(orig); p++ {
+					page := orig[p*ps : (p+1)*ps]
+					if page[0] == 5 && slices.Contains(lost, binary.LittleEndian.Uint16(page[0x14:])) {
+						clear(page)
+						zeroed++
+					}
+				}
+				dir := t.TempDir()
+				path := filepath.Join(dir, "shop.fdb")
+				os.WriteFile(path, orig, 0o644)
+
+				got := filepath.Join(dir, "out")
+				out.Reset()
+				errOut.Reset()
+				if code := run([]string{"export", "--ddl", ddlPath, "--out", got, path}, &out, &errOut); code != 2 {
+					t.Fatalf("relations %v lost: exit %d, want 2: %s%s", lost, code, out.String(), errOut.String())
+				}
+				for _, tb := range tables {
+					a, _ := os.ReadFile(filepath.Join(want, tb+".csv"))
+					b, err := os.ReadFile(filepath.Join(got, tb+".csv"))
+					if err != nil || !bytes.Equal(a, b) {
+						t.Errorf("relations %v lost (%d pages): %s.csv differs from the intact export (%v)\n%s", lost, zeroed, tb, err, out.String())
+					}
+				}
+			}
+		})
+	}
+}
+
+// TestAllVersions: --versions all writes each row's version chain as
+// versions.sql left it (see tools/mkcorpus/sql/versions.sql), newest first.
+func TestAllVersions(t *testing.T) {
+	want := map[string][]string{ // ID -> versions as "state/deleted/V"
+		"1": {"committed/0/one c"},
+		"2": {"rolled back/0/two rolled back", "committed/0/two"},
+		"3": {"rolled back/0/three rolled back again", "committed/0/three"},
+		"4": {"rolled back/1/", "committed/0/four"},
+		"6": {"rolled back/0/six never committed"},
+		"7": {"rolled back/0/seven rolled back", "committed/0/seven committed"},
+		"8": {"rolled back/0/" + strings.Repeat("x", 60), "committed/0/eight"},
+	}
+	for _, db := range corpus.List(t) {
+		if db.Name != "versions" {
+			continue
+		}
+		t.Run(db.Engine, func(t *testing.T) {
+			dir := t.TempDir()
+			var out, errOut bytes.Buffer
+			if code := run([]string{"export", "--versions", "all", "--out", dir, db.Path}, &out, &errOut); code != 0 {
+				t.Fatalf("exit %d: %s%s", code, out.String(), errOut.String())
+			}
+			b, _ := os.ReadFile(filepath.Join(dir, "VERS.versions.csv"))
+			recs, err := csv.NewReader(bytes.NewReader(b)).ReadAll()
+			if err != nil || len(recs) < 2 || strings.Join(recs[0], ",") != "_PAGE,_LINE,_VERSION,_TRANSACTION,_STATE,_DELETED,ID,V,N" {
+				t.Fatalf("versions file: %v\n%s", err, b)
+			}
+			chains := map[string][]string{} // page:line -> versions
+			ids := map[string]string{}      // page:line -> ID
+			for _, r := range recs[1:] {
+				key := r[0] + ":" + r[1]
+				if r[2] != strconv.Itoa(len(chains[key])) {
+					t.Errorf("%s: version %s out of order", key, r[2])
+				}
+				chains[key] = append(chains[key], r[4]+"/"+r[5]+"/"+r[7])
+				if r[6] != "" {
+					ids[key] = r[6]
+				}
+			}
+			got := map[string][]string{}
+			for key, c := range chains {
+				got[ids[key]] = c
+			}
+			for id, w := range want {
+				if strings.Join(got[id], " | ") != strings.Join(w, " | ") {
+					t.Errorf("ID %s: got %q, want %q", id, got[id], w)
+				}
+			}
+			if len(got) != len(want) {
+				t.Errorf("%d rows with versions, want %d: %q", len(got), len(want), got)
+			}
+
+			// The SQL form creates its own table and loads.
+			sqlDir := filepath.Join(dir, "sql")
+			if code := run([]string{"export", "--format", "sql", "--versions", "all", "--out", sqlDir, db.Path}, &out, &errOut); code != 0 {
+				t.Fatalf("sql: exit %d", code)
+			}
+			newDB := filepath.Join(dir, "new.fdb")
+			fbTool(t, db.Engine, "create database '"+newDB+"' default character set utf8; quit;", "isql", "-q")
+			fbTool(t, db.Engine, "", "isql", "-q", "-b", "-ch", "UTF8", "-i", filepath.Join(sqlDir, "VERS.versions.sql"), newDB)
+			n := fbTool(t, db.Engine, `set list on; select count(*) from "VERS_VERSIONS"; quit;`, "isql", "-q", newDB)
+			if !strings.Contains(n, strconv.Itoa(len(recs)-1)) {
+				t.Errorf("VERS_VERSIONS holds %s, want %d rows", strings.TrimSpace(n), len(recs)-1)
 			}
 		})
 	}

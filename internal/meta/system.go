@@ -76,18 +76,6 @@ func sysTotalFields(rel, ods int) int {
 	return len(sysFields(rel, ods))
 }
 
-func alignment(dtype uint8) uint32 {
-	switch dtype {
-	case value.TypeVarying, value.TypeShort:
-		return 2
-	case value.TypeLong:
-		return 4
-	case value.TypeBlob:
-		return 8
-	}
-	return 1
-}
-
 // systemFormat returns the fields of a system table, by name.
 func systemFormat(rel int, db *fdb.File) map[string]value.Field {
 	ods := 11
@@ -102,7 +90,7 @@ func systemFormat(rel int, db *fdb.File) map[string]value.Field {
 	off := ((n + 32) &^ 31) >> 3 // null bitmap, as the engine sizes it
 	out := map[string]value.Field{}
 	for i, sf := range sysFields(rel, ods) {
-		a := alignment(sf.dtype)
+		a := value.Alignment(sf.dtype)
 		off = (off + a - 1) / a * a
 		f := value.Field{ID: i, DType: sf.dtype, Length: sf.len, Offset: off}
 		if sf.dtype == value.TypeVarying {

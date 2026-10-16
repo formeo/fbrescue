@@ -243,6 +243,25 @@ func charsetInfo(id int) charset {
 	return charset{name: fmt.Sprintf("CHARSET_%d", id), bytesPerChar: 1}
 }
 
+// BytesPerChar returns the maximum bytes per character of a character set.
+func BytesPerChar(id int) int { return charsetInfo(id).bytesPerChar }
+
+// Alignment is the engine's alignment of a field of type dtype in a record:
+// fields are laid out in field id order after the null bitmap, each at the
+// next multiple of its alignment. Checked against every record format in
+// the corpus.
+func Alignment(dtype uint8) uint32 {
+	switch dtype {
+	case TypeVarying, TypeShort:
+		return 2
+	case TypeLong, TypeReal, TypeDate, TypeTime, TypeTimeTZ, TypeTimestampTZ:
+		return 4
+	case TypeDouble, TypeTimestamp, TypeBlob, TypeInt64, TypeDec64, TypeDec128, TypeInt128:
+		return 8
+	}
+	return 1
+}
+
 // CharsetName returns the Firebird name of a character set id.
 func CharsetName(id int) string { return charsetInfo(id).name }
 

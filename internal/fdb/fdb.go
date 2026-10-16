@@ -45,6 +45,8 @@ type File struct {
 	Pages    uint32   // logical pages that can be read
 	Files    []Part   // the main file first
 	Warnings []string // problems found while opening
+
+	moved map[uint32]uint32 // logical page -> page whose location holds it (see Relocate)
 }
 
 // Part is one physical file of the database.
@@ -192,6 +194,9 @@ func (db *File) warn(format string, args ...any) {
 
 // ReadPage reads logical page n into buf, which must be PageSize long.
 func (db *File) ReadPage(n uint32, buf []byte) error {
+	if at, ok := db.moved[n]; ok {
+		n = at
+	}
 	for i := len(db.Files) - 1; i >= 0; i-- {
 		p := &db.Files[i]
 		if n < p.FirstPage {
@@ -217,6 +222,25 @@ func (db *File) Close() error {
 
 // PageNumber returns the page's own number, stored by ODS 12+ on every page.
 func PageNumber(page []byte) uint32 { return binary.LittleEndian.Uint32(page[12:]) }
+
+// CheckNumber reports a page read as page n that holds the contents of
+// another page (ODS 12+ only: ODS 11 pages do not carry their number).
+func (db *File) CheckNumber(n uint32, page []byte) error {
+	if db.Family == ODS12Plus && page[0] != 0 && PageNumber(page) != n {
+		return fmt.Errorf("page %d holds the contents of page %d", n, PageNumber(page))
+	}
+	return nil
+}
+
+// Relocate makes ReadPage(n) read the contents stored at the location of
+// page at: for a page found in the wrong place (ODS 12+ pages carry their
+// own number).
+func (db *File) Relocate(n, at uint32) {
+	if db.moved == nil {
+		db.moved = map[uint32]uint32{}
+	}
+	db.moved[n] = at
+}
 
 // detectPageSize finds the page size from page signatures when the header
 // is unreadable: ODS 12+ stores each page's own number at offset 12, ODS 11

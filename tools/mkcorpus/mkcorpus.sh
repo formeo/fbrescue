@@ -137,6 +137,10 @@ for v in 25 30 40 50; do
     fb "$v" isql -q -ch UTF8 "$d/fb4types.fdb" -i "$SQL/fb4types.sql"
   fi
 
+  # A small shop with indexes and blobs: the input of the damage tests.
+  create_db "$v" "$d/shop.fdb" 3 4096 "default character set utf8"
+  fb "$v" isql -q -ch UTF8 "$d/shop.fdb" -i "$SQL/shop.sql"
+
   # nbackup lock with a committed row that lives only in nblock.fdb.delta.
   cp "$d/base.fdb" "$d/nblock.fdb"
   fb "$v" nbackup -L "$d/nblock.fdb"
