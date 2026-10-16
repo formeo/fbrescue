@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"encoding/csv"
 	"fmt"
+	"math"
 	"math/rand/v2"
 	"os"
 	"path/filepath"
@@ -131,8 +132,9 @@ func TestRecovery(t *testing.T) {
 			t.Errorf("%s: never applied", k.Name)
 			continue
 		}
-		pct := 100 * float64(tl.correct) / float64(tl.rows)
-		pctDDL := 100 * float64(tl.ddlCorrect) / float64(tl.rows)
+		// Rounded down, so that 100% means every row.
+		pct := math.Floor(1000*float64(tl.correct)/float64(tl.rows)) / 10
+		pctDDL := math.Floor(1000*float64(tl.ddlCorrect)/float64(tl.rows)) / 10
 		fmt.Fprintf(&md, "| %s | %d | %.1f%% | %.1f%% | %d | %d | %d | %d |\n", k.Name, tl.trials, pct, pctDDL,
 			tl.changedReported, tl.changedSilent, tl.extra, tl.failed)
 		if tl.ddlCorrect < tl.correct || tl.ddlWrong > tl.changedSilent+tl.extra {

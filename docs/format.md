@@ -169,6 +169,23 @@ WITH TIME ZONE (see below). CHAR in a multi-byte character set is padded
 with spaces to its length in bytes; the value is padded to its length in
 characters.
 
+Layout of a record (used by `--ddl`, which has only CREATE TABLE
+statements): the null bitmap, then the fields in field id order, each at
+the next multiple of its alignment — 1 for CHAR and BOOLEAN; 2 VARCHAR,
+SMALLINT; 4 INTEGER, FLOAT, DATE, TIME, TIME and TIMESTAMP WITH TIME ZONE;
+8 DOUBLE, TIMESTAMP, BLOB, BIGINT, DECFLOAT, INT128. Field ids follow the
+order columns were created in; a COMPUTED BY column has an id and a null
+bit but no bytes; a dropped column keeps its id. Types are stored as:
+NUMERIC(1-4) SMALLINT, NUMERIC(5-9) and DECIMAL(1-9) INTEGER, (10-18)
+BIGINT, (19-38) INT128, sub type 1 NUMERIC, 2 DECIMAL; CHAR(n) and
+VARCHAR(n) as n × the character set's bytes per character (+2 for
+VARCHAR); text blobs keep their character set in the scale byte. Test:
+`TestLayoutMatchesFormats` computes the layout of every table in the
+corpus from the scripts that created it and from fbrescue's own
+schema.sql, and compares it with RDB$FORMATS field by field; breaking any
+of these rules fails it. Firebird 5 stores a record it does not compress
+(flag 0x800) one byte longer than its format.
+
 ## Firebird 4 types
 
 INT128: 16 bytes, little-endian two's complement. DECFLOAT: IEEE 754
@@ -239,6 +256,38 @@ in full, written with NO AUTO UNDO and with garbage collection off so the
 versions stay on disk) in `TestExportRoundTrip` and `TestPage` on every
 engine, the RB table (`TestRolledBackVersions`, `TestExportWarnings`) and
 `TestIncludeDeleted`.
+
+## Damaged databases
+
+What export relies on when the structure is damaged. Test: `TestRecovery`
+(the recovery table in the README) and `TestExportWithDDL`.
+
+- Every data page carries its relation (0x14) and sequence number (0x10).
+  A full pass over the file (the same as `scan`) lists the data pages in
+  use — not free in the page inventory, not holding another page's number
+  — by relation. A relation's data pages are those its pointer pages list,
+  plus those the pass found for sequence numbers no listed page has.
+  RDB$PAGES is a relation like the others, so a broken chain of its
+  pointer pages, or an unknown first pointer page (damaged header), is
+  covered the same way.
+- ODS 12+: a page whose stored number is n, found at another location
+  while location n does not hold page n, is read from where it is
+  (`fdb.Relocate`). Record, fragment and blob page reads check the stored
+  number, so a page is never read as another one.
+- Transaction states: every transaction older than the OIT committed
+  (`TestHealthyCorpusMatchesGstat` checks that the inventory agrees). With
+  the inventory damaged, the state of newer ones is unknown and the newest
+  version is taken. The TIP chain from RDB$PAGES is replaced by the one
+  found by scanning when RDB$PAGES lists fewer pages.
+- Header page: the page size and family come from the other pages
+  (above). Of the ODS versions of that family, the one under which the
+  rows of RDB$RELATIONS for relations 0-8 carry their own names
+  (RDB$PAGES, RDB$RELATIONS, ...) is used; 13.0 and 13.1 differ in record
+  encoding, 12 and 13 in the length of names.
+- A relation with record formats and data but no RDB$RELATIONS row is
+  exported as TABLE_<id> with its newest format; stored fields of the
+  current format without an RDB$RELATION_FIELDS row as FIELD_<id>. User
+  relation ids start at 128.
 
 ## Character sets
 

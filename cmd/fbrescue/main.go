@@ -23,9 +23,13 @@ Commands:
   scan    <db>                page map, damage, per-table summary
   tables  <db>                schema of the user tables (CREATE TABLE)
   export  <db> --out <dir>    export the user tables
+  page    <db> <N>            decode one page: header, pointer slots, records and their values
+  report  <db>                JSON report to attach to a bug report: structure and problems
+                              found, no data, table and column names replaced by numbers
+  version                     print the version
 
 Options:
-  --json                      machine-readable output (info, scan, tables, export summary)
+  --json                      machine-readable output (info, scan, tables, page, export summary)
   --format csv|sql|jsonl      export: file format (default csv)
   --table NAME                export: only this table; repeat for more
   --charset NAME              export: decode CHARACTER SET NONE text as NAME, e.g. WIN1251
@@ -34,14 +38,6 @@ Options:
                               transaction and state, to <table>.versions.<format>
   --ddl FILE                  export, tables: CREATE TABLE statements for tables whose definition
                               is lost from the database (e.g. a schema.sql of an earlier export)
-
-  page    <db> <N>            decode one page: header, pointer slots, records and their values
-
-  report  <db>                diagnostic report to attach to a bug report, as JSON: the
-                              database structure and the problems found, no data, names
-                              replaced by numbers
-
-  version                     print the version
 
 Exit status: 0 ok, 1 error, 2 problems found (scan) or data left out (export).
 `
