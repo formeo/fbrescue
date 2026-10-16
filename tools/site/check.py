@@ -1,5 +1,5 @@
-"""Checks the built site: every page rendered (no Liquid left), has a title
-and a description, links to pages and anchors that exist, and each page
+"""Checks the built site: every page rendered (no Liquid left), in the
+language of its section (ru/ or not), has a title and a description, links to pages and anchors that exist, and each page
 with a translation links to it and back (hreflang).
 
 Usage: python3 tools/site/check.py <built site dir>
@@ -17,11 +17,13 @@ SITE = "https://formeo.github.io/fbrescue/"
 class Page(html.parser.HTMLParser):
     def __init__(self):
         super().__init__()
-        self.links, self.alternates, self.title, self.description = [], {}, "", ""
+        self.links, self.alternates, self.title, self.description, self.lang = [], {}, "", "", ""
         self._in_title = False
 
     def handle_starttag(self, tag, attrs):
         a = dict(attrs)
+        if tag == "html":
+            self.lang = a.get("lang", "")
         if tag == "a" and "href" in a:
             self.links.append(a["href"])
         if tag == "link" and a.get("rel") == "alternate" and "hreflang" in a:
@@ -62,6 +64,8 @@ def main(site):
             errors.append(f"{rel}: Liquid left unrendered")
         if not p.title.strip() or not p.description.strip():
             errors.append(f"{rel}: no title or description")
+        if p.lang != p_lang(f, site):
+            errors.append(f"{rel}: <html lang> is {p.lang!r}, the page is in {p_lang(f, site)}")
     for f, p in pages.items():
         rel = f.relative_to(site)
         for href in p.links:

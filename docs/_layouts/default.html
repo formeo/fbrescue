@@ -1,5 +1,4 @@
 <!DOCTYPE html>
-{%- assign ru = page.lang == "ru" -%}
 <html lang="{{ page.lang | default: site.lang }}">
 <head>
   <meta charset="utf-8">
@@ -7,7 +6,7 @@
   {% seo %}
   {%- if page.alt %}
   <link rel="alternate" hreflang="{{ page.lang | default: site.lang }}" href="{{ page.url | absolute_url }}">
-  <link rel="alternate" hreflang="{% if ru %}en{% else %}ru{% endif %}" href="{{ page.alt | absolute_url }}">
+  <link rel="alternate" hreflang="{% if page.lang == "ru" %}en{% else %}ru{% endif %}" href="{{ page.alt | absolute_url }}">
   {%- endif %}
   <style>
     :root {
@@ -46,9 +45,9 @@
 </head>
 <body>
   <header>
-    <a class="brand" href="{{ '/' | relative_url }}{% if ru %}ru/{% endif %}">fb<span>rescue</span></a>
+    <a class="brand" href="{{ '/' | relative_url }}{% if page.lang == "ru" %}ru/{% endif %}">fb<span>rescue</span></a>
     <nav>
-      {%- if ru %}
+      {%- if page.lang == "ru" %}
       <a href="{{ '/ru/' | relative_url }}">Восстановление</a>
       <a href="{{ '/ru/errors/' | relative_url }}">Ошибки</a>
       <a href="https://github.com/formeo/fbrescue/releases/latest">Скачать</a>
@@ -67,7 +66,7 @@
 {{ content }}
   </main>
   <footer>
-    {%- if ru %}
+    {%- if page.lang == "ru" %}
     fbrescue — открытая утилита (MIT) для выгрузки данных из повреждённых баз Firebird 2.5–5.0. Она только читает файл и никогда его не изменяет.
     {%- else %}
     fbrescue is an open-source (MIT) tool that gets data out of damaged Firebird 2.5–5.0 databases. It only reads the file and never modifies it.
