@@ -1,6 +1,5 @@
 # fbrescue
 
-[![Build Status](https://img.shields.io/github/actions/workflow/status/formeo/fbrescue/build.yml?branch=main&style=flat-square&label=Build)](https://github.com/formeo/fbrescue/actions)
 [![License](https://img.shields.io/github/license/formeo/fbrescue?style=flat-square)](https://github.com/formeo/fbrescue/blob/main/LICENSE)
 [![Latest Release](https://img.shields.io/github/v/release/formeo/fbrescue?style=flat-square)](https://github.com/formeo/fbrescue/releases)
 [![Language](https://img.shields.io/github/languages/top/formeo/fbrescue?style=flat-square)]()
