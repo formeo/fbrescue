@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="{{ page.lang | default: site.lang }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  {% seo %}
+  {%- if page.alt %}
+  <link rel="alternate" hreflang="{{ page.lang | default: site.lang }}" href="{{ page.url | absolute_url }}">
+  <link rel="alternate" hreflang="{% if page.lang == "ru" %}en{% else %}ru{% endif %}" href="{{ page.alt | absolute_url }}">
+  {%- endif %}
+  <style>
+    :root {
+      --bg: #fdfdfc; --fg: #1d1f21; --muted: #5b6168; --line: #e3e5e8;
+      --accent: #b3261e; --code-bg: #f3f4f6; --link: #0b57d0;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg: #15171a; --fg: #e6e7e9; --muted: #9aa0a6; --line: #2c3036;
+              --accent: #f2867e; --code-bg: #1f2328; --link: #8ab4f8; }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--fg);
+           font: 17px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+    header, main, footer { max-width: 780px; margin: 0 auto; padding: 0 20px; }
+    header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 20px; padding-top: 22px; padding-bottom: 14px;
+             border-bottom: 1px solid var(--line); }
+    header .brand { font-weight: 700; font-size: 20px; color: var(--fg); text-decoration: none; margin-right: auto; }
+    header .brand span { color: var(--accent); }
+    header nav a { color: var(--muted); text-decoration: none; margin-left: 16px; font-size: 15px; }
+    header nav a:hover { color: var(--fg); }
+    main { padding-top: 8px; padding-bottom: 40px; }
+    h1 { font-size: 30px; line-height: 1.25; margin: 28px 0 12px; overflow-wrap: anywhere; }
+    h1 code { font-size: 0.8em; }
+    h2 { font-size: 22px; margin: 34px 0 8px; }
+    h3 { font-size: 18px; margin: 24px 0 6px; }
+    a { color: var(--link); }
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.88em;
+           background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+    pre { background: var(--code-bg); padding: 12px 14px; border-radius: 6px; overflow-x: auto; line-height: 1.45; }
+    pre code { background: none; padding: 0; font-size: 14px; }
+    blockquote { margin: 16px 0; padding: 4px 16px; border-left: 4px solid var(--accent); color: var(--fg); background: var(--code-bg); border-radius: 0 6px 6px 0; }
+    table { border-collapse: collapse; width: 100%; font-size: 15px; display: block; overflow-x: auto; }
+    th, td { border-bottom: 1px solid var(--line); padding: 6px 8px; text-align: left; }
+    footer { border-top: 1px solid var(--line); padding-top: 14px; padding-bottom: 30px; color: var(--muted); font-size: 14px; }
+  </style>
+</head>
+<body>
+  <header>
+    <a class="brand" href="{{ '/' | relative_url }}{% if page.lang == "ru" %}ru/{% endif %}">fb<span>rescue</span></a>
+    <nav>
+      {%- if page.lang == "ru" %}
+      <a href="{{ '/ru/' | relative_url }}">Восстановление</a>
+      <a href="{{ '/ru/errors/' | relative_url }}">Ошибки</a>
+      <a href="https://github.com/formeo/fbrescue/releases/latest">Скачать</a>
+      <a href="https://github.com/formeo/fbrescue">GitHub</a>
+      {%- if page.alt %}<a href="{{ page.alt | relative_url }}" hreflang="en">English</a>{% endif %}
+      {%- else %}
+      <a href="{{ '/' | relative_url }}">Recovery</a>
+      <a href="{{ '/errors/' | relative_url }}">Errors</a>
+      <a href="https://github.com/formeo/fbrescue/releases/latest">Download</a>
+      <a href="https://github.com/formeo/fbrescue">GitHub</a>
+      {%- if page.alt %}<a href="{{ page.alt | relative_url }}" hreflang="ru">Русский</a>{% endif %}
+      {%- endif %}
+    </nav>
+  </header>
+  <main>
+{{ content }}
+  </main>
+  <footer>
+    {%- if page.lang == "ru" %}
+    fbrescue — открытая утилита (MIT) для выгрузки данных из повреждённых баз Firebird 2.5–5.0. Она только читает файл и никогда его не изменяет.
+    {%- else %}
+    fbrescue is an open-source (MIT) tool that gets data out of damaged Firebird 2.5–5.0 databases. It only reads the file and never modifies it.
+    {%- endif %}
+  </footer>
+</body>
+</html>
