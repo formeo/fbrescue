@@ -3,7 +3,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  {%- if page.noindex %}
+  <meta name="robots" content="noindex">
+  {%- endif %}
   {% seo %}
+  <link rel="icon" href="{{ '/favicon.svg' | relative_url }}" type="image/svg+xml">
+  <link rel="icon" href="{{ '/favicon-48.png' | relative_url }}" sizes="48x48" type="image/png">
   {%- if page.software %}
   <script type="application/ld+json">
   {
@@ -40,6 +45,7 @@
   {%- if page.alt %}
   <link rel="alternate" hreflang="{{ page.lang | default: site.lang }}" href="{{ page.url | absolute_url }}">
   <link rel="alternate" hreflang="{% if page.lang == "ru" %}en{% else %}ru{% endif %}" href="{{ page.alt | absolute_url }}">
+  <link rel="alternate" hreflang="x-default" href="{% if page.lang == "ru" %}{{ page.alt | absolute_url }}{% else %}{{ page.url | absolute_url }}{% endif %}">
   {%- endif %}
   <style>
     :root {
@@ -58,7 +64,7 @@
              border-bottom: 1px solid var(--line); }
     header .brand { font-weight: 700; font-size: 20px; color: var(--fg); text-decoration: none; margin-right: auto; }
     header .brand span { color: var(--accent); }
-    header nav a { color: var(--muted); text-decoration: none; margin-left: 16px; font-size: 15px; }
+    header nav a { color: var(--muted); text-decoration: none; margin-left: 4px; padding: 12px 6px; display: inline-block; font-size: 15px; }
     header nav a:hover { color: var(--fg); }
     main { padding-top: 8px; padding-bottom: 40px; }
     h1 { font-size: 30px; line-height: 1.25; margin: 28px 0 12px; overflow-wrap: anywhere; }
@@ -74,6 +80,8 @@
     table { border-collapse: collapse; width: 100%; font-size: 15px; display: block; overflow-x: auto; }
     th, td { border-bottom: 1px solid var(--line); padding: 6px 8px; text-align: left; }
     footer { border-top: 1px solid var(--line); padding-top: 14px; padding-bottom: 30px; color: var(--muted); font-size: 14px; }
+    footer nav { display: flex; flex-wrap: wrap; gap: 0 4px; margin: 0 0 8px -6px; }
+    footer nav a { color: var(--muted); padding: 12px 6px; display: inline-block; }
   </style>
 </head>
 <body>
@@ -104,8 +112,26 @@
   </main>
   <footer>
     {%- if page.lang == "ru" %}
+    <nav>
+      <a href="{{ '/ru/' | relative_url }}">Восстановление базы</a>
+      <a href="{{ '/ru/errors/' | relative_url }}">Ошибки Firebird</a>
+      <a href="{{ '/ru/open-fdb-without-firebird/' | relative_url }}">Открыть .fdb без Firebird</a>
+      <a href="{{ '/ru/firebird-to-csv/' | relative_url }}">Firebird в CSV и Excel</a>
+      <a href="{{ '/ru/firebird-to-postgresql/' | relative_url }}">Firebird в PostgreSQL</a>
+      <a href="{{ '/ru/compare/' | relative_url }}">Сравнение</a>
+      <a href="{{ '/ru/faq/' | relative_url }}">FAQ</a>
+    </nav>
     fbrescue — открытая утилита (MIT) для выгрузки данных из повреждённых баз Firebird 2.5–5.0. Она только читает файл и никогда его не изменяет.
     {%- else %}
+    <nav>
+      <a href="{{ '/' | relative_url }}">Database recovery</a>
+      <a href="{{ '/errors/' | relative_url }}">Firebird errors</a>
+      <a href="{{ '/open-fdb-without-firebird/' | relative_url }}">Open .fdb without Firebird</a>
+      <a href="{{ '/firebird-to-csv/' | relative_url }}">Firebird to CSV and Excel</a>
+      <a href="{{ '/firebird-to-postgresql/' | relative_url }}">Firebird to PostgreSQL</a>
+      <a href="{{ '/compare/' | relative_url }}">Compare tools</a>
+      <a href="{{ '/faq/' | relative_url }}">FAQ</a>
+    </nav>
     fbrescue is an open-source (MIT) tool that gets data out of damaged Firebird 2.5–5.0 databases. It only reads the file and never modifies it.
     {%- endif %}
   </footer>

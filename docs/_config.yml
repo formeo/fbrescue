@@ -20,6 +20,13 @@ defaults:
       path: ""
     values:
       layout: default
+      locale: en_US
+      image: /assets/og.png
+  - scope:
+      path: "ru"
+    values:
+      locale: ru_RU
+      image: /assets/og-ru.png
   - scope:
       path: "googlec556762a732d5bd7.html" # Search Console ownership file
     values:
