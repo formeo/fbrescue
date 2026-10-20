@@ -27,6 +27,10 @@ software: true
 
 fbrescue достаёт данные, но не чинит сам файл. Индексы, триггеры, процедуры и пользователи не выгружаются — создайте их заново в новой базе. Чем fbrescue отличается от gfix/gbak и IBSurgeon FirstAID — в [сравнении](compare/), короткие ответы — в [FAQ](faq/).
 
+## База цела, но открыть её нечем?
+
+Та же утилита выгружает и неповреждённые базы: [открыть .fdb без Firebird]({{ '/ru/open-fdb-without-firebird/' | relative_url }}), [выгрузить в CSV и Excel]({{ '/ru/firebird-to-csv/' | relative_url }}), [перенести данные в PostgreSQL]({{ '/ru/firebird-to-postgresql/' | relative_url }}).
+
 ## Частые ошибки
 
 {% include errors-ru.md %}

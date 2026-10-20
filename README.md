@@ -20,7 +20,9 @@ The database does not open, a query or a backup stops with one of these, and Fir
 - `I/O error during "read" operation for file`, `Error while trying to read from file`
 - `gbak: ERROR` ... `gbak:Exiting before completion due to errors`
 
-What each one means and the order of steps that saves the most data: **[formeo.github.io/fbrescue](https://formeo.github.io/fbrescue/)** ([по-русски](https://formeo.github.io/fbrescue/ru/)).
+Or the database is fine, but there is no Firebird to open it: fbrescue exports intact databases too — see [open a .fdb file without Firebird](https://formeo.github.io/fbrescue/open-fdb-without-firebird/), [export to CSV or Excel](https://formeo.github.io/fbrescue/firebird-to-csv/), [move the data to PostgreSQL](https://formeo.github.io/fbrescue/firebird-to-postgresql/).
+
+What each error means and the order of steps that saves the most data: **[formeo.github.io/fbrescue](https://formeo.github.io/fbrescue/)** ([по-русски](https://formeo.github.io/fbrescue/ru/)).
 
 ## Install
 

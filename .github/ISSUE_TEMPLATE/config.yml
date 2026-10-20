@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Recovering a corrupted Firebird database, step by step
+    url: https://formeo.github.io/fbrescue/
+    about: The order of steps that saves the most data, and what the common error messages mean.

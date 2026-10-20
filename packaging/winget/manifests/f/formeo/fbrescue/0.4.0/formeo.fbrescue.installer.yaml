@@ -1,0 +1,15 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.6.0.schema.json
+PackageIdentifier: formeo.fbrescue
+PackageVersion: 0.4.0
+InstallerType: zip
+NestedInstallerType: portable
+NestedInstallerFiles:
+  - RelativeFilePath: fbrescue.exe
+    PortableCommandAlias: fbrescue
+ReleaseDate: 2026-10-16
+Installers:
+  - Architecture: x64
+    InstallerUrl: https://github.com/formeo/fbrescue/releases/download/v0.4.0/fbrescue_v0.4.0_windows_amd64.zip
+    InstallerSha256: 79CBB7797567CCD0AE2845AA608FB3C5BF010C417527162764419859F48B3883
+ManifestType: installer
+ManifestVersion: 1.6.0

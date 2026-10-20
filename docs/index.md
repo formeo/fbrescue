@@ -27,6 +27,10 @@ How much comes back from each kind of damage is measured on hundreds of damaged 
 
 fbrescue gets the data out; it does not repair the file in place. Indexes, triggers, procedures and users are not exported: create them again in the new database. How it compares with gfix/gbak and IBSurgeon FirstAID: [comparison](compare/); short answers: [FAQ](faq/).
 
+## Not damaged, just no Firebird to open it?
+
+The same tool exports intact databases: [open a .fdb file without Firebird]({{ '/open-fdb-without-firebird/' | relative_url }}), [export to CSV or Excel]({{ '/firebird-to-csv/' | relative_url }}), [move the data to PostgreSQL]({{ '/firebird-to-postgresql/' | relative_url }}).
+
 ## Common errors
 
 {% include errors-en.md %}
