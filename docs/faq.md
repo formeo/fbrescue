@@ -8,7 +8,8 @@ faq:
     a: >-
       Yes. fbrescue reads the `.fdb` file directly, without the engine and without `fbclient`, and exports
       every table to CSV, SQL (INSERT statements) or JSON Lines. It is a single binary for Windows, Linux
-      and macOS. It also works when the database no longer opens and `gbak` cannot back it up.
+      and macOS. It also works when the database no longer opens and `gbak` cannot back it up. Step by step:
+      [open a .fdb file without Firebird](../open-fdb-without-firebird/).
   - q: Does fbrescue change or repair my database file?
     a: >-
       No. It opens the file read-only and never writes to it; a test in CI runs every command on read-only
