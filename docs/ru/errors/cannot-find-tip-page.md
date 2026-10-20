@@ -1,6 +1,6 @@
 ---
 title: "Ошибка Firebird: cannot find tip page (165) — что делать"
-description: Что значит «internal Firebird consistency check (cannot find tip page (165))» — повреждена таблица состояний транзакций Firebird — и как выгрузить данные, если база больше не открывается.
+description: "Ошибка Firebird «cannot find tip page (165)»: повреждена таблица состояний транзакций. Как выгрузить данные, если база не открывается."
 lang: ru
 alt: /errors/cannot-find-tip-page/
 ---

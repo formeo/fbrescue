@@ -1,6 +1,6 @@
 ---
-title: "Программы для восстановления базы Firebird: gfix/gbak, IBSurgeon FirstAID, fbrescue"
-description: "Чем восстанавливать повреждённую базу Firebird — штатными gfix и gbak, IBSurgeon FirstAID или бесплатным открытым fbrescue: что делает каждый, платформы, версии, цена."
+title: "Восстановление Firebird: gfix/gbak, FirstAID, fbrescue"
+description: "gfix/gbak, IBSurgeon FirstAID или fbrescue для повреждённой базы Firebird: что делает каждый, платформы, версии, цена."
 lang: ru
 alt: /compare/
 ---

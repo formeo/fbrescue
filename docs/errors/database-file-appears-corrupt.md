@@ -1,6 +1,6 @@
 ---
-title: "Firebird: database file appears corrupt / page is of wrong type"
-description: What the Firebird errors "database file appears corrupt" and "page N is of wrong type (expected X, found Y)" mean, and how to get the data out of the damaged database.
+title: "Firebird: database file appears corrupt, wrong page type"
+description: "What \"database file appears corrupt\" and \"page is of wrong type\" mean in Firebird, and how to get the data out of the damaged database."
 lang: en
 alt: /ru/errors/database-file-appears-corrupt/
 ---

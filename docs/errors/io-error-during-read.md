@@ -1,6 +1,6 @@
 ---
 title: "Firebird: I/O error during \"read\" operation for file"
-description: What the Firebird error "I/O error during read operation ... Error while trying to read from file" means — a truncated database file or a failing disk — and how to save the data that is still there.
+description: "Firebird \"I/O error during read operation\": a truncated database file or a failing disk. What it means and how to save the data that is still there."
 lang: en
 alt: /ru/errors/io-error-during-read/
 ---

@@ -1,6 +1,6 @@
 ---
-title: "fbrescue FAQ: recovering data from a corrupted Firebird database"
-description: Short answers about recovering a damaged Firebird database with fbrescue — without the server, without changing the file, which versions, what it costs, what it cannot recover.
+title: "fbrescue FAQ: data from a corrupted Firebird database"
+description: "Short answers on recovering a damaged Firebird database with fbrescue: without the server, without changing the file, versions, price, limits."
 lang: en
 alt: /ru/faq/
 faq:

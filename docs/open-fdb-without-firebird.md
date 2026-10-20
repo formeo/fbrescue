@@ -1,6 +1,6 @@
 ---
 title: Open a Firebird .fdb file without Firebird installed
-description: How to see the tables of a Firebird database file (.fdb, .gdb) and get its data out when no Firebird server is installed — with fbrescue, a free tool that reads the file directly.
+description: "See the tables of a Firebird .fdb or .gdb file and export its data without a Firebird server installed, with fbrescue, a free tool."
 lang: en
 alt: /ru/open-fdb-without-firebird/
 ---

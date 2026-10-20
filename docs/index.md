@@ -1,6 +1,6 @@
 ---
 title: Recover data from a corrupted Firebird database
-description: What to do when a Firebird database is corrupted and gbak cannot back it up — the engine's own tools first, then fbrescue, a free read-only tool that exports the data without the engine.
+description: "What to do when a Firebird database is corrupted and gbak fails: the engine's tools first, then fbrescue, a free tool that reads the file without the engine."
 lang: en
 alt: /ru/
 software: true
