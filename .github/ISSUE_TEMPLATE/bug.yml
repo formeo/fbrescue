@@ -1,0 +1,16 @@
+name: Bug or idea
+description: Something in fbrescue does not work as documented, or could work better. For databases fbrescue cannot read, use "Recovery problem".
+body:
+  - type: input
+    id: version
+    attributes:
+      label: fbrescue version
+      description: Output of `fbrescue version`.
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, or what you would like
+    validations:
+      required: true

@@ -1,0 +1,53 @@
+name: Recovery problem
+description: fbrescue could not read a database, or got less data out than you expected.
+title: "Recovery: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. **Do not attach the database or any exported data**: it holds your or your customers' data, and this page is public.
+        Instead, run `fbrescue report copy.fdb > report.json` and attach `report.json`. It describes the structure of the file and the damage, without any values; table and column names are replaced by numbers. Have a look at it before you attach it.
+  - type: input
+    id: version
+    attributes:
+      label: fbrescue version
+      description: Output of `fbrescue version`.
+      placeholder: fbrescue v0.4.0
+    validations:
+      required: true
+  - type: input
+    id: firebird
+    attributes:
+      label: Firebird version of the database
+      description: The server that created or last used the database, or the "Engine" line of `fbrescue info`.
+      placeholder: ODS 13.1 (Firebird 5.0)
+  - type: dropdown
+    id: os
+    attributes:
+      label: Where you ran fbrescue
+      options:
+        - Windows
+        - Linux
+        - macOS
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: How the database got damaged, if you know; the command you ran; what you expected and what you got. What gfix and gbak said helps too.
+    validations:
+      required: true
+  - type: textarea
+    id: report
+    attributes:
+      label: fbrescue report
+      description: Attach report.json here (drag the file into this box).
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Output of the command
+      description: The summary fbrescue printed, and a few lines of _errors.jsonl if there is one. Check them for values first.
+      render: text
