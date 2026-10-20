@@ -1,6 +1,6 @@
 ---
-title: "Ошибка Firebird: decompression overran buffer (179) — что делать"
-description: Что значит ошибка Firebird «internal Firebird consistency check (decompression overran buffer (179))» — повреждённая запись — и как спасти остальную таблицу, если gfix и gbak не помогают.
+title: "Firebird: decompression overran buffer (179) — что делать"
+description: "Ошибка Firebird «decompression overran buffer (179)»: повреждена запись. Как спасти остальную таблицу, если gfix и gbak не помогают."
 lang: ru
 alt: /errors/decompression-overran-buffer/
 ---

@@ -1,6 +1,6 @@
 ---
-title: "Firebird database recovery tools compared: gfix/gbak, IBSurgeon FirstAID, fbrescue"
-description: Which tool to use on a corrupted Firebird database — the engine's gfix and gbak, IBSurgeon FirstAID, or the free open-source fbrescue — what each does, platforms, versions, price.
+title: "Firebird recovery tools: gfix/gbak, FirstAID, fbrescue"
+description: "gfix/gbak, IBSurgeon FirstAID or fbrescue for a corrupted Firebird database: what each does, platforms, versions and price."
 lang: en
 alt: /ru/compare/
 ---

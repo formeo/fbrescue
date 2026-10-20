@@ -1,6 +1,6 @@
 ---
 title: "gbak cannot back up a damaged Firebird database"
-description: '"gbak: ERROR ... Exiting before completion due to errors" on a damaged Firebird database: the gbak options that get further, and how to get the data out when gbak still fails.'
+description: "gbak stops with \"Exiting before completion due to errors\" on a damaged Firebird database: options that get further, and what to do when it still fails."
 lang: en
 alt: /ru/errors/gbak-backup-fails/
 ---

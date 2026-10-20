@@ -1,6 +1,6 @@
 ---
-title: Как открыть файл базы Firebird .fdb без установленного Firebird
-description: Как посмотреть таблицы файла базы Firebird (.fdb, .gdb) и достать из него данные, если сервер Firebird не установлен, — с помощью fbrescue, бесплатной утилиты, которая читает файл напрямую.
+title: "Как открыть .fdb без установленного Firebird"
+description: "Как посмотреть таблицы файла Firebird .fdb или .gdb и выгрузить данные без установленного сервера — бесплатной утилитой fbrescue."
 lang: ru
 alt: /open-fdb-without-firebird/
 ---

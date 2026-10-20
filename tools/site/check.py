@@ -75,6 +75,11 @@ def main(site):
             errors.append(f"{rel}: Liquid left unrendered")
         if not p.title.strip() or not p.description.strip():
             errors.append(f"{rel}: no title or description")
+        elif len(p.title.strip()) > 70:
+            errors.append(f"{rel}: title is {len(p.title.strip())} characters, keep it within 70")
+        elif not 25 <= len(p.description) <= 160:
+            # Bing Webmaster flags descriptions outside 25-160 characters.
+            errors.append(f"{rel}: description is {len(p.description)} characters, keep it within 25-160")
         types = []
         for block in p.jsonld:
             try:

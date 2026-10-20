@@ -1,6 +1,6 @@
 ---
 title: "Ошибка Firebird: wrong record length (183) — что делать"
-description: Что значит ошибка Firebird «internal Firebird consistency check (wrong record length (183))» и как сохранить данные таблицы, если gfix и gbak не проходят повреждённую запись.
+description: "Ошибка Firebird «wrong record length (183)»: что она значит и как сохранить данные таблицы, если gfix и gbak не проходят запись."
 lang: ru
 alt: /errors/wrong-record-length/
 ---

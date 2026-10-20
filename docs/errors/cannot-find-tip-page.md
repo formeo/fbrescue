@@ -1,5 +1,5 @@
 ---
-title: "internal Firebird consistency check (cannot find tip page (165))"
+title: "Firebird error: cannot find tip page (165)"
 description: What "cannot find tip page (165)" means — the Firebird transaction inventory is damaged — and how to export the data when the database no longer opens.
 lang: en
 alt: /ru/errors/cannot-find-tip-page/
