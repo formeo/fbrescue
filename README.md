@@ -5,7 +5,7 @@
 [![Language](https://img.shields.io/github/languages/top/formeo/fbrescue?style=flat-square)]()
 [![Downloads](https://img.shields.io/github/downloads/formeo/fbrescue/total?style=flat-square&label=Downloads)](https://github.com/formeo/fbrescue/releases)
 
-Read-only data recovery for Firebird 2.5–5.0 databases.
+Open-source Firebird recovery tool: read-only data recovery for Firebird 2.5–5.0 databases.
 
 `fbrescue` reads `.fdb` / `.gdb` files directly, without the Firebird engine, and gets data out of databases that `gbak` cannot back up. **It never modifies the source file.**
 
