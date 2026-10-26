@@ -2,7 +2,6 @@
 title: "Firebird error: wrong record length (183)"
 description: What the Firebird error "wrong record length (183)" means and how to save the data of the table when gfix and gbak cannot get past the damaged record.
 lang: en
-alt: /ru/errors/wrong-record-length/
 ---
 
 # `internal Firebird consistency check (wrong record length (183))`

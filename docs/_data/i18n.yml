@@ -1,0 +1,57 @@
+# Interface text of the layout, per language (the keys are the page.lang values).
+# prefix: where the language's pages live; every page exists in every language
+# under the same path after the prefix.
+en:
+  name: English
+  prefix: ""
+  nav:
+    - [Recovery, /]
+    - [Errors, /errors/]
+    - [Compare, /compare/]
+    - [FAQ, /faq/]
+  download: Download
+  footer_nav:
+    - [Database recovery, /]
+    - [Firebird errors, /errors/]
+    - [Open .fdb without Firebird, /open-fdb-without-firebird/]
+    - [Firebird to CSV and Excel, /firebird-to-csv/]
+    - [Firebird to PostgreSQL, /firebird-to-postgresql/]
+    - [Compare tools, /compare/]
+    - [FAQ, /faq/]
+  footer: fbrescue is an open-source (MIT) tool that gets data out of damaged Firebird 2.5–5.0 databases. It only reads the file and never modifies it.
+ru:
+  name: Русский
+  prefix: /ru
+  nav:
+    - [Восстановление, /]
+    - [Ошибки, /errors/]
+    - [Сравнение, /compare/]
+    - [FAQ, /faq/]
+  download: Скачать
+  footer_nav:
+    - [Восстановление базы, /]
+    - [Ошибки Firebird, /errors/]
+    - [Открыть .fdb без Firebird, /open-fdb-without-firebird/]
+    - [Firebird в CSV и Excel, /firebird-to-csv/]
+    - [Firebird в PostgreSQL, /firebird-to-postgresql/]
+    - [Сравнение, /compare/]
+    - [FAQ, /faq/]
+  footer: fbrescue — открытая утилита (MIT) для выгрузки данных из повреждённых баз Firebird 2.5–5.0. Она только читает файл и никогда его не изменяет.
+pt-BR:
+  name: Português
+  prefix: /pt
+  nav:
+    - [Recuperação, /]
+    - [Erros, /errors/]
+    - [Comparação, /compare/]
+    - [FAQ, /faq/]
+  download: Baixar
+  footer_nav:
+    - [Recuperar banco de dados, /]
+    - [Erros do Firebird, /errors/]
+    - [Abrir .fdb sem o Firebird, /open-fdb-without-firebird/]
+    - [Firebird para CSV e Excel, /firebird-to-csv/]
+    - [Firebird para PostgreSQL, /firebird-to-postgresql/]
+    - [Comparação, /compare/]
+    - [FAQ, /faq/]
+  footer: fbrescue é uma ferramenta de código aberto (MIT) que extrai os dados de bancos Firebird 2.5–5.0 danificados. Ela só lê o arquivo e nunca o modifica.

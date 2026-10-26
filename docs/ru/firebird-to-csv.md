@@ -2,7 +2,6 @@
 title: Выгрузка базы Firebird в CSV и Excel
 description: Как выгрузить все таблицы базы Firebird (.fdb) в CSV, JSON Lines или SQL без сервера Firebird и открыть результат в Excel, LibreOffice или скрипте.
 lang: ru
-alt: /firebird-to-csv/
 ---
 
 # Выгрузка базы Firebird в CSV и Excel

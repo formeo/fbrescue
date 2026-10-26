@@ -2,7 +2,6 @@
 title: "Firebird error: decompression overran buffer (179)"
 description: What the Firebird error "decompression overran buffer (179)" means — a damaged record — and how to get the rest of the table back when gfix and gbak fail.
 lang: en
-alt: /ru/errors/decompression-overran-buffer/
 ---
 
 # `internal Firebird consistency check (decompression overran buffer (179))`

@@ -2,7 +2,6 @@
 title: Firebird database corruption errors and what to do
 description: "Firebird corruption errors explained: consistency checks, wrong page type, I/O errors, gbak failures — what each means and how to get the data back."
 lang: en
-alt: /ru/errors/
 ---
 
 # Firebird corruption errors and what to do

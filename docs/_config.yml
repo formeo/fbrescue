@@ -5,6 +5,8 @@ description: Read-only data recovery for corrupted Firebird 2.5–5.0 databases.
 url: https://formeo.github.io
 baseurl: /fbrescue
 lang: en
+languages: [en, ru, pt-BR] # see _data/i18n.yml
+goatcounter: fbrescue # https://fbrescue.goatcounter.com
 author: formeo
 plugins:
   - jekyll-seo-tag
@@ -27,6 +29,11 @@ defaults:
     values:
       locale: ru_RU
       image: /assets/og-ru.png
+  - scope:
+      path: "pt"
+    values:
+      locale: pt_BR
+      image: /assets/og-pt.png
   - scope:
       path: "googlec556762a732d5bd7.html" # Search Console ownership file
     values:

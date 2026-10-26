@@ -2,7 +2,6 @@
 title: "Восстановление Firebird: gfix/gbak, FirstAID, fbrescue"
 description: "gfix/gbak, IBSurgeon FirstAID или fbrescue, бесплатная альтернатива с открытым кодом, для повреждённой базы Firebird: что делает каждый и цена."
 lang: ru
-alt: /compare/
 ---
 
 # Программы для восстановления Firebird: сравнение
