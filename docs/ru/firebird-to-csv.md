@@ -7,7 +7,7 @@ alt: /firebird-to-csv/
 
 # Выгрузка базы Firebird в CSV и Excel
 
-[fbrescue](https://github.com/formeo/fbrescue) записывает каждую таблицу базы Firebird 2.5–5.0 в отдельный CSV-файл прямо из файла базы, без сервера, ODBC-драйвера и пароля. Скачайте бинарник для своей системы на странице [Releases](https://github.com/formeo/fbrescue/releases/latest) и выполните:
+[fbrescue](https://github.com/formeo/fbrescue), бесплатная утилита с открытым кодом (лицензия MIT), записывает каждую таблицу базы Firebird 2.5–5.0 в отдельный CSV-файл прямо из файла базы, без сервера, ODBC-драйвера и пароля. Скачайте бинарник для своей системы на странице [Releases](https://github.com/formeo/fbrescue/releases/latest) и выполните:
 
 ```
 fbrescue export shop.fdb --out data

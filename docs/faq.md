@@ -30,9 +30,9 @@ faq:
       Yes. On a copy of the file run `gfix -v -full -n`, then `gfix -mend -full -ignore` and
       `gbak -b -ig -g`. If the backup completes and restores, you get the whole database back, with indexes,
       triggers and procedures. Use fbrescue when gbak still stops.
-  - q: How is fbrescue different from IBSurgeon FirstAID?
+  - q: Is there a free alternative to IBSurgeon FirstAID?
     a: >-
-      FirstAID is a commercial Windows tool that can repair the database file in place or extract data,
+      For getting the data out, yes: fbrescue. FirstAID is a commercial Windows tool that can repair the database file in place or extract data,
       and supports InterBase and older Firebird versions. fbrescue is free, read-only, runs on Windows,
       Linux and macOS, and only extracts data, from Firebird 2.5 to 5.0. See the [comparison](../compare/).
   - q: What does fbrescue not recover?

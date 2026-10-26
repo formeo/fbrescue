@@ -7,7 +7,7 @@ alt: /firebird-to-postgresql/
 
 # Перенос данных из Firebird в PostgreSQL
 
-Эта страница — про перенос данных при миграции: как перенести все таблицы базы Firebird 2.5–5.0 в PostgreSQL. [fbrescue](https://github.com/formeo/fbrescue) читает файл `.fdb` напрямую, поэтому старый сервер запускать не нужно, а его CSV — именно то, что ждёт `COPY` в PostgreSQL.
+Эта страница — про перенос данных при миграции: как перенести все таблицы базы Firebird 2.5–5.0 в PostgreSQL. [fbrescue](https://github.com/formeo/fbrescue), бесплатная утилита с открытым кодом (лицензия MIT), читает файл `.fdb` напрямую, поэтому старый сервер запускать не нужно, а его CSV — именно то, что ждёт `COPY` в PostgreSQL.
 
 ## 1. Выгрузка
 

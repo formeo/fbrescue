@@ -1,6 +1,6 @@
 ---
 title: "Firebird recovery tools: gfix/gbak, FirstAID, fbrescue"
-description: "gfix/gbak, IBSurgeon FirstAID or fbrescue for a corrupted Firebird database: what each does, platforms, versions and price."
+description: "gfix/gbak, IBSurgeon FirstAID or fbrescue, a free open-source alternative, for a corrupted Firebird database: what each does and costs."
 lang: en
 alt: /ru/compare/
 ---
@@ -19,6 +19,7 @@ Three kinds of tools get data back from a damaged Firebird database. They do dif
 | Platforms | wherever Firebird runs | Windows 7 or later (copy files from Linux servers) | Windows, Linux, macOS; one binary, no Firebird needed |
 | Interface | command line | graphical | command line, JSON output for scripts |
 | Price | free, part of Firebird | free preview; a license per database for the repair (from $199 for 3 databases)¹ | free, MIT license |
+| Free version | everything | shows the data; repairing or extracting it needs a license | everything |
 | Source | open | closed | [open](https://github.com/formeo/fbrescue), with a [published recovery rate](https://github.com/formeo/fbrescue#recovery-rate) |
 
 ¹ From [IBSurgeon's FirstAID page](https://ib-aid.com/en/ibsurgeon-firstaid/), October 2026. IBSurgeon also offers a recovery service for heavy cases.

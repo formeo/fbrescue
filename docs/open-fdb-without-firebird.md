@@ -9,7 +9,7 @@ alt: /ru/open-fdb-without-firebird/
 
 You have a database file from an old program — `.fdb`, sometimes `.gdb` — and no Firebird server, no password, maybe not even the program any more. You need to see what is in it, or get the data into something you use today.
 
-[fbrescue](https://github.com/formeo/fbrescue) reads the file directly. Nothing to install: download the single binary for Windows, Linux or macOS from [Releases](https://github.com/formeo/fbrescue/releases/latest). No server, no user name, no password, and it never writes to the file.
+[fbrescue](https://github.com/formeo/fbrescue), a free, open-source (MIT) tool, reads the file directly. Nothing to install: download the single binary for Windows, Linux or macOS from [Releases](https://github.com/formeo/fbrescue/releases/latest). No server, no user name, no password, and it never writes to the file.
 
 ## See what is in the file
 
