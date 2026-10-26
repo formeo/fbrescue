@@ -2,7 +2,6 @@
 title: "Firebird: I/O error during read — что делать"
 description: "Ошибка Firebird «I/O error during read operation»: файл базы обрезан или сбоит диск. Что это значит и как сохранить оставшиеся данные."
 lang: ru
-alt: /errors/io-error-during-read/
 ---
 
 # `I/O error during "read" operation for file`

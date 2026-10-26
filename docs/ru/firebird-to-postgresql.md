@@ -2,7 +2,6 @@
 title: Перенос данных из Firebird в PostgreSQL
 description: "Перенос таблиц Firebird в PostgreSQL: выгрузка .fdb в CSV без сервера, соответствие типов, загрузка через \\copy. Также MySQL и SQL Server."
 lang: ru
-alt: /firebird-to-postgresql/
 ---
 
 # Перенос данных из Firebird в PostgreSQL

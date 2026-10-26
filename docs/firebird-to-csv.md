@@ -2,7 +2,6 @@
 title: Export a Firebird database to CSV or Excel
 description: Export every table of a Firebird database (.fdb) to CSV, JSON Lines or SQL — without a Firebird server — and open the result in Excel, LibreOffice or a script.
 lang: en
-alt: /ru/firebird-to-csv/
 ---
 
 # Export a Firebird database to CSV or Excel

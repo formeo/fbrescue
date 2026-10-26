@@ -2,7 +2,6 @@
 title: "gbak не делает бэкап повреждённой базы Firebird"
 description: "gbak обрывается с «Exiting before completion due to errors» на повреждённой базе Firebird: ключи, которые помогают, и что делать дальше."
 lang: ru
-alt: /errors/gbak-backup-fails/
 ---
 
 # `gbak: ERROR` … `gbak:Exiting before completion due to errors`

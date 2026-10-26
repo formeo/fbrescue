@@ -2,7 +2,6 @@
 title: "fbrescue FAQ: data from a corrupted Firebird database"
 description: "Short answers on recovering a damaged Firebird database with fbrescue: without the server, without changing the file, versions, price, limits."
 lang: en
-alt: /ru/faq/
 faq:
   - q: Can I get the data out of a Firebird database without the Firebird server?
     a: >-

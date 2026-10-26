@@ -2,7 +2,6 @@
 title: Move data from Firebird to PostgreSQL
 description: "Move Firebird tables to PostgreSQL: export the .fdb to CSV without a Firebird server, map the types, load with \\copy. MySQL and SQL Server too."
 lang: en
-alt: /ru/firebird-to-postgresql/
 ---
 
 # Move data from Firebird to PostgreSQL

@@ -2,7 +2,6 @@
 title: "fbrescue: вопросы о восстановлении базы Firebird"
 description: "Короткие ответы о восстановлении базы Firebird с fbrescue: без сервера, без изменения файла, какие версии, цена, ограничения."
 lang: ru
-alt: /faq/
 faq:
   - q: Можно ли достать данные из базы Firebird без сервера Firebird?
     a: >-

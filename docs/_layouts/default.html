@@ -2,6 +2,10 @@
 <html lang="{{ page.lang | default: site.lang }}">
 <head>
   <meta charset="utf-8">
+  {%- assign t = site.data.i18n[page.lang] | default: site.data.i18n.en %}
+  {%- comment %} The page's path without the language prefix: /ru/faq/ and /faq/ are both /faq/. {% endcomment %}
+  {%- assign path = page.url %}
+  {%- if t.prefix != "" %}{% assign path = page.url | remove_first: t.prefix %}{% endif %}
   <meta name="viewport" content="width=device-width, initial-scale=1">
   {%- if page.noindex %}
   <meta name="robots" content="noindex">
@@ -42,11 +46,12 @@
   }
   </script>
   {%- endif %}
-  {%- if page.alt %}
-  <link rel="alternate" hreflang="{{ page.lang | default: site.lang }}" href="{{ page.url | absolute_url }}">
-  <link rel="alternate" hreflang="{% if page.lang == "ru" %}en{% else %}ru{% endif %}" href="{{ page.alt | absolute_url }}">
-  <link rel="alternate" hreflang="x-default" href="{% if page.lang == "ru" %}{{ page.alt | absolute_url }}{% else %}{{ page.url | absolute_url }}{% endif %}">
-  {%- endif %}
+  {%- unless page.noindex %}
+  {%- for code in site.languages %}
+  <link rel="alternate" hreflang="{{ code }}" href="{{ site.data.i18n[code].prefix | append: path | absolute_url }}">
+  {%- endfor %}
+  <link rel="alternate" hreflang="x-default" href="{{ path | absolute_url }}">
+  {%- endunless %}
   <style>
     :root {
       --bg: #fdfdfc; --fg: #1d1f21; --muted: #5b6168; --line: #e3e5e8;
@@ -91,54 +96,41 @@
 </head>
 <body>
   <header>
-    <a class="brand" href="{{ '/' | relative_url }}{% if page.lang == "ru" %}ru/{% endif %}">fb<span>rescue</span></a>
+    <a class="brand" href="{{ t.prefix | append: '/' | relative_url }}">fb<span>rescue</span></a>
     <nav>
-      {%- if page.lang == "ru" %}
-      <a href="{{ '/ru/' | relative_url }}">Восстановление</a>
-      <a href="{{ '/ru/errors/' | relative_url }}">Ошибки</a>
-      <a href="{{ '/ru/compare/' | relative_url }}">Сравнение</a>
-      <a href="{{ '/ru/faq/' | relative_url }}">FAQ</a>
-      <a href="https://github.com/formeo/fbrescue/releases/latest">Скачать</a>
+      {%- for item in t.nav %}
+      <a href="{{ t.prefix | append: item[1] | relative_url }}">{{ item[0] }}</a>
+      {%- endfor %}
+      <a href="https://github.com/formeo/fbrescue/releases/latest">{{ t.download }}</a>
       <a href="https://github.com/formeo/fbrescue">GitHub</a>
-      {%- if page.alt %}<a href="{{ page.alt | relative_url }}" hreflang="en">English</a>{% endif %}
-      {%- else %}
-      <a href="{{ '/' | relative_url }}">Recovery</a>
-      <a href="{{ '/errors/' | relative_url }}">Errors</a>
-      <a href="{{ '/compare/' | relative_url }}">Compare</a>
-      <a href="{{ '/faq/' | relative_url }}">FAQ</a>
-      <a href="https://github.com/formeo/fbrescue/releases/latest">Download</a>
-      <a href="https://github.com/formeo/fbrescue">GitHub</a>
-      {%- if page.alt %}<a href="{{ page.alt | relative_url }}" hreflang="ru">Русский</a>{% endif %}
-      {%- endif %}
+      {%- unless page.noindex %}
+      {%- for code in site.languages %}{% unless code == page.lang %}
+      <a href="{{ site.data.i18n[code].prefix | append: path | relative_url }}" hreflang="{{ code }}">{{ site.data.i18n[code].name }}</a>
+      {%- endunless %}{% endfor %}
+      {%- endunless %}
     </nav>
   </header>
   <main>
 {{ content }}
   </main>
   <footer>
-    {%- if page.lang == "ru" %}
     <nav>
-      <a href="{{ '/ru/' | relative_url }}">Восстановление базы</a>
-      <a href="{{ '/ru/errors/' | relative_url }}">Ошибки Firebird</a>
-      <a href="{{ '/ru/open-fdb-without-firebird/' | relative_url }}">Открыть .fdb без Firebird</a>
-      <a href="{{ '/ru/firebird-to-csv/' | relative_url }}">Firebird в CSV и Excel</a>
-      <a href="{{ '/ru/firebird-to-postgresql/' | relative_url }}">Firebird в PostgreSQL</a>
-      <a href="{{ '/ru/compare/' | relative_url }}">Сравнение</a>
-      <a href="{{ '/ru/faq/' | relative_url }}">FAQ</a>
+      {%- for item in t.footer_nav %}
+      <a href="{{ t.prefix | append: item[1] | relative_url }}">{{ item[0] }}</a>
+      {%- endfor %}
     </nav>
-    fbrescue — открытая утилита (MIT) для выгрузки данных из повреждённых баз Firebird 2.5–5.0. Она только читает файл и никогда его не изменяет.
-    {%- else %}
-    <nav>
-      <a href="{{ '/' | relative_url }}">Database recovery</a>
-      <a href="{{ '/errors/' | relative_url }}">Firebird errors</a>
-      <a href="{{ '/open-fdb-without-firebird/' | relative_url }}">Open .fdb without Firebird</a>
-      <a href="{{ '/firebird-to-csv/' | relative_url }}">Firebird to CSV and Excel</a>
-      <a href="{{ '/firebird-to-postgresql/' | relative_url }}">Firebird to PostgreSQL</a>
-      <a href="{{ '/compare/' | relative_url }}">Compare tools</a>
-      <a href="{{ '/faq/' | relative_url }}">FAQ</a>
-    </nav>
-    fbrescue is an open-source (MIT) tool that gets data out of damaged Firebird 2.5–5.0 databases. It only reads the file and never modifies it.
-    {%- endif %}
+    {{ t.footer }}
   </footer>
+  {%- if site.goatcounter %}
+  <!-- Page views and download clicks, without cookies: https://www.goatcounter.com -->
+  <script data-goatcounter="https://{{ site.goatcounter }}.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script>
+  <script>
+    document.addEventListener("click", function (e) {
+      var a = e.target.closest && e.target.closest('a[href*="github.com/formeo/fbrescue/releases"]');
+      if (a && window.goatcounter && window.goatcounter.count)
+        window.goatcounter.count({path: "download", title: location.pathname, event: true});
+    });
+  </script>
+  {%- endif %}
 </body>
 </html>
