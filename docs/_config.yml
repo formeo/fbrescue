@@ -6,7 +6,7 @@ url: https://formeo.github.io
 baseurl: /fbrescue
 lang: en
 languages: [en, ru, pt-BR] # see _data/i18n.yml
-goatcounter: fbrescue # https://fbrescue.goatcounter.com
+goatcounter: formeo # https://formeo.goatcounter.com
 author: formeo
 plugins:
   - jekyll-seo-tag
