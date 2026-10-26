@@ -46,3 +46,17 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v5
+      # Bing (which ChatGPT search uses) and Yandex learn about new and changed
+      # pages right away instead of on their next crawl. The key file is
+      # docs/<key>.txt; it covers every URL under /fbrescue/.
+      - name: Submit the pages to IndexNow
+        continue-on-error: true
+        env:
+          KEY: 19d7431d83deb1bdc6d69bfff9db4e51
+          SITE: https://formeo.github.io/fbrescue
+        run: |
+          urls=$(curl -fsS "$SITE/sitemap.xml" | grep -o '<loc>[^<]*</loc>' | sed 's/<[^>]*>//g' | jq -Rsc 'split("\n") | map(select(. != ""))')
+          jq -n --arg key "$KEY" --arg loc "$SITE/$KEY.txt" --argjson urls "$urls" \
+            '{host: "formeo.github.io", key: $key, keyLocation: $loc, urlList: $urls}' |
+          curl -fsS -X POST https://api.indexnow.org/indexnow \
+            -H 'Content-Type: application/json; charset=utf-8' --data-binary @- -w 'IndexNow: HTTP %{http_code}\n'

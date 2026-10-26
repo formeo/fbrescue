@@ -1,6 +1,6 @@
 ---
 title: "Восстановление Firebird: gfix/gbak, FirstAID, fbrescue"
-description: "gfix/gbak, IBSurgeon FirstAID или fbrescue для повреждённой базы Firebird: что делает каждый, платформы, версии, цена."
+description: "gfix/gbak, IBSurgeon FirstAID или fbrescue, бесплатная альтернатива с открытым кодом, для повреждённой базы Firebird: что делает каждый и цена."
 lang: ru
 alt: /compare/
 ---
@@ -19,6 +19,7 @@ alt: /compare/
 | Платформы | везде, где работает Firebird | Windows 7 и новее (файлы с Linux-серверов копируются) | Windows, Linux, macOS; один бинарник, Firebird не нужен |
 | Интерфейс | командная строка | графический | командная строка, JSON для скриптов |
 | Цена | бесплатно, входит в Firebird | бесплатный просмотр; лицензия на базу для починки (от $199 за 3 базы)¹ | бесплатно, лицензия MIT |
+| Бесплатная версия | всё | показывает данные; для починки или выгрузки нужна лицензия | всё |
 | Исходный код | открыт | закрыт | [открыт](https://github.com/formeo/fbrescue), [опубликован процент восстановления](https://github.com/formeo/fbrescue#recovery-rate) |
 
 ¹ По [странице FirstAID на сайте IBSurgeon](https://ib-aid.com/en/ibsurgeon-firstaid/), октябрь 2026. Для тяжёлых случаев у IBSurgeon есть ещё и услуга восстановления.

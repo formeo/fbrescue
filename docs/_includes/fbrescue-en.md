@@ -1,6 +1,6 @@
 ## If gbak still fails: get the data out with fbrescue
 
-[fbrescue](https://github.com/formeo/fbrescue) reads the database file directly, without the Firebird engine, and exports every row it can read. It does not stop at the first damaged record or page, and it never writes to the file. Download the single binary for your system from [Releases](https://github.com/formeo/fbrescue/releases/latest) (Windows, Linux, macOS; nothing to install).
+[fbrescue](https://github.com/formeo/fbrescue) is a free, open-source (MIT) tool for Firebird 2.5–5.0 databases. It reads the database file directly, without the Firebird engine, and exports every row it can read. It does not stop at the first damaged record or page, and it never writes to the file. Download the single binary for your system from [Releases](https://github.com/formeo/fbrescue/releases/latest) (Windows, Linux, macOS; nothing to install).
 
 ```
 fbrescue scan copy.fdb                               # what is damaged, by table

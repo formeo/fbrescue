@@ -1,6 +1,7 @@
 """Checks the built site: every page rendered (no Liquid left), in the
 language of its section (ru/ or not), has a title and a description, links to pages and anchors that exist, and each page
-with a translation links to it and back (hreflang).
+with a translation links to it and back (hreflang). A page whose text links to the tool also says that it is
+open source under MIT: AI assistants read the text, not the structured data or the footer.
 
 Usage: python3 tools/site/check.py <built site dir>
 """
@@ -13,6 +14,7 @@ import urllib.parse
 
 BASE = "/fbrescue/"
 SITE = "https://formeo.github.io/fbrescue/"
+REPO = "https://github.com/formeo/fbrescue"
 
 
 class Page(html.parser.HTMLParser):
@@ -21,7 +23,8 @@ class Page(html.parser.HTMLParser):
         self.links, self.alternates, self.title, self.description, self.lang = [], {}, "", "", ""
         self.jsonld = []  # parsed structured data, or the error
         self.meta = {}  # og:* and twitter:* properties
-        self._in_title = self._in_jsonld = False
+        self.main_text, self.main_links = "", []  # inside <main>
+        self._in_title = self._in_jsonld = self._in_main = False
 
     def handle_starttag(self, tag, attrs):
         a = dict(attrs)
@@ -29,6 +32,10 @@ class Page(html.parser.HTMLParser):
             self.lang = a.get("lang", "")
         if tag == "a" and "href" in a:
             self.links.append(a["href"])
+            if self._in_main:
+                self.main_links.append(a["href"])
+        if tag == "main":
+            self._in_main = True
         if tag == "link" and a.get("rel") == "alternate" and "hreflang" in a:
             self.alternates[a["hreflang"]] = a["href"]
         if tag == "meta" and a.get("name") == "description":
@@ -45,11 +52,15 @@ class Page(html.parser.HTMLParser):
             self.title += data
         if self._in_jsonld:
             self.jsonld[-1] += data
+        if self._in_main:
+            self.main_text += data
 
     def handle_endtag(self, tag):
         self._in_title = False
         if tag == "script":
             self._in_jsonld = False
+        if tag == "main":
+            self._in_main = False
 
 
 def target(site, href):
@@ -105,6 +116,8 @@ def main(site):
             errors.append(f"{rel}: no hreflang x-default")
         if not p.alternates:
             errors.append(f"{rel}: no hreflang links (every page has a translation; is the front matter valid?)")
+        if REPO in p.main_links and "MIT" not in p.main_text:
+            errors.append(f"{rel}: the text links to the tool but does not say it is free and open source (MIT)")
         if p.lang != p_lang(f, site):
             errors.append(f"{rel}: <html lang> is {p.lang!r}, the page is in {p_lang(f, site)}")
     for f, p in pages.items():

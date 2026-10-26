@@ -79,6 +79,11 @@
     blockquote { margin: 16px 0; padding: 4px 16px; border-left: 4px solid var(--accent); color: var(--fg); background: var(--code-bg); border-radius: 0 6px 6px 0; }
     table { border-collapse: collapse; width: 100%; font-size: 15px; display: block; overflow-x: auto; }
     th, td { border-bottom: 1px solid var(--line); padding: 6px 8px; text-align: left; }
+    @media (max-width: 600px) {
+      /* Wide tables scroll sideways; keep the row labels in view and the cells readable. */
+      th, td { min-width: 10em; }
+      th:first-child, td:first-child { min-width: 6.5em; position: sticky; left: 0; background: var(--bg); }
+    }
     footer { border-top: 1px solid var(--line); padding-top: 14px; padding-bottom: 30px; color: var(--muted); font-size: 14px; }
     footer nav { display: flex; flex-wrap: wrap; gap: 0 4px; margin: 0 0 8px -6px; }
     footer nav a { color: var(--muted); padding: 12px 6px; display: inline-block; }
