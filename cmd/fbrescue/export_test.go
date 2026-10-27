@@ -172,6 +172,62 @@ func firstDiff(a, b string) string {
 
 func itoa(i int) string { b, _ := json.Marshal(i); return string(b) }
 
+// TestExportExcel checks --excel against the plain CSV of the types table:
+// a BOM, ';' between fields, a decimal comma in numbers and every other
+// value unchanged.
+func TestExportExcel(t *testing.T) {
+	for _, db := range corpus.List(t) {
+		if db.Name != "types" {
+			continue
+		}
+		t.Run(db.Engine, func(t *testing.T) {
+			plain, excel := t.TempDir(), t.TempDir()
+			for dir, extra := range map[string][]string{plain: nil, excel: {"--excel"}} {
+				var out, errOut bytes.Buffer
+				if code := run(append([]string{"export", "--out", dir, db.Path}, extra...), &out, &errOut); code != 0 {
+					t.Fatalf("%v: exit %d: %s%s", extra, code, out.String(), errOut.String())
+				}
+			}
+			rawPlain, _ := os.ReadFile(filepath.Join(plain, "TYPES.csv"))
+			rawExcel, _ := os.ReadFile(filepath.Join(excel, "TYPES.csv"))
+			body, ok := bytes.CutPrefix(rawExcel, []byte("\uFEFF"))
+			if !ok {
+				t.Fatalf("no UTF-8 BOM at the start: %q", rawExcel[:min(len(rawExcel), 8)])
+			}
+			want, err := csv.NewReader(bytes.NewReader(rawPlain)).ReadAll()
+			if err != nil {
+				t.Fatal(err)
+			}
+			r := csv.NewReader(bytes.NewReader(body))
+			r.Comma = ';'
+			got, err := r.ReadAll()
+			if err != nil || len(got) != len(want) {
+				t.Fatalf("excel csv: %v, %d records, want %d", err, len(got), len(want))
+			}
+			// The numeric columns of the types table; every other value must be unchanged.
+			numeric := map[string]bool{"ID": true, "SM": true, "I": true, "BI": true, "N42": true, "N92": true,
+				"N184": true, "DC": true, "FL": true, "DP": true}
+			for i, row := range want {
+				for j, v := range row {
+					if i > 0 && numeric[want[0][j]] {
+						v = strings.Replace(v, ".", ",", 1)
+					}
+					if got[i][j] != v {
+						t.Errorf("row %d %s = %q, want %q", i, want[0][j], got[i][j], v)
+					}
+				}
+			}
+			if g := got[2][slices.Index(want[0], "N184")]; g != "-99999999999999,9999" {
+				t.Errorf("row 2 N184 = %q, want a decimal comma", g)
+			}
+			var out, errOut bytes.Buffer
+			if code := run([]string{"export", "--excel", "--format", "sql", "--out", t.TempDir(), db.Path}, &out, &errOut); code != 1 {
+				t.Errorf("--excel --format sql: exit %d, want 1", code)
+			}
+		})
+	}
+}
+
 // TestExportFormats checks CSV and JSON Lines on the types table: quoting,
 // NULL versus empty string, extreme values and non-ASCII text.
 func TestExportFormats(t *testing.T) {

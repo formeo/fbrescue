@@ -40,6 +40,8 @@ Commands:
 Options:
   --json                      machine-readable output (info, scan, tables, page, export summary)
   --format csv|sql|jsonl      export: file format (default csv)
+  --excel                     export: CSV that Excel opens by double-click where the decimal separator
+                              is a comma: UTF-8 BOM, ';' between fields, decimal comma in numbers
   --table NAME                export: only this table; repeat for more
   --charset NAME              export: decode CHARACTER SET NONE text as NAME, e.g. WIN1251
   --include-deleted           export: also write deleted rows still on disk, to <table>.deleted.<format>
@@ -97,6 +99,7 @@ type cliArgs struct {
 	path           string
 	json           bool
 	includeDeleted bool
+	excel          bool
 	out            string
 	format         string
 	charset        string
@@ -125,6 +128,10 @@ func parseArgs(cmd string, in []string) (cliArgs, error) {
 		}
 		if name == "include-deleted" && !hasVal && cmd == "export" {
 			a.includeDeleted = true
+			continue
+		}
+		if name == "excel" && !hasVal && cmd == "export" {
+			a.excel = true
 			continue
 		}
 		dst, ok := valued[name]
@@ -160,6 +167,9 @@ func parseArgs(cmd string, in []string) (cliArgs, error) {
 		}
 		if a.format != "csv" && a.format != "sql" && a.format != "jsonl" {
 			return a, fmt.Errorf("unknown format %q: use csv, sql or jsonl", a.format)
+		}
+		if a.excel && a.format != "csv" {
+			return a, fmt.Errorf("--excel writes CSV; it cannot be combined with --format %s", a.format)
 		}
 		if a.versions != "" && a.versions != "all" && a.versions != "visible" {
 			return a, fmt.Errorf("unknown --versions %q: use all or visible", a.versions)

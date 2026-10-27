@@ -35,6 +35,10 @@ Use `--table NAME` (repeatable) for some tables only. Make a copy of the file fi
 
 Double-clicking a CSV makes Excel guess the encoding and the separator, which breaks non-English text and, in some countries, the columns. Instead: **Data → From Text/CSV**, choose the file, set *File origin* to **65001: Unicode (UTF-8)** and *Delimiter* to **Comma**, then **Load**. LibreOffice Calc asks the same in its import dialog.
 
+### By double-click: `--excel`
+
+Where Excel uses a decimal comma (Brazil, Russia, most of Europe), `fbrescue export old.fdb --out data --excel` writes CSV it opens by double-click: a UTF-8 BOM so the encoding is detected, `;` between fields, and a decimal comma in numbers (text, dates and times are unchanged). Double-click does not let you choose column types, so two things change on the way in: codes kept as text that look like numbers (`00123`, postal codes, tax ids) lose their leading zeros, and numbers with more than 15 digits (`BIGINT` ids, `NUMERIC(18)`) lose precision. For those columns use the import above and set the column to *Text*.
+
 ## Other formats
 
 - `--format jsonl`: one JSON object per row, exact numbers as JSON numbers — easiest for Python, Node or `jq`.

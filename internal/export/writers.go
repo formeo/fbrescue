@@ -56,11 +56,22 @@ func text(v any) string {
 }
 
 // CSV: RFC 4180 with a header row. NULL is an empty unquoted field; an
-// empty string is "" so the two stay distinct.
-type csvWriter struct{ w *bufio.Writer }
+// empty string is "" so the two stay distinct. For Excel the file starts
+// with a UTF-8 BOM, fields are separated by ';' and numbers have a decimal
+// comma: what an Excel with a comma decimal separator (Brazil, Russia, most
+// of Europe) opens by double-click.
+type csvWriter struct {
+	w     *bufio.Writer
+	excel bool
+	sep   byte
+}
 
-func newCSV(w *bufio.Writer, cols []*meta.Column) (*csvWriter, error) {
-	c := &csvWriter{w}
+func newCSV(w *bufio.Writer, cols []*meta.Column, excel bool) (*csvWriter, error) {
+	c := &csvWriter{w: w, excel: excel, sep: ','}
+	if excel {
+		c.sep = ';'
+		w.WriteString("\uFEFF")
+	}
 	names := make([]any, len(cols))
 	for i, col := range cols {
 		names[i] = value.Text{S: col.Name}
@@ -71,13 +82,16 @@ func newCSV(w *bufio.Writer, cols []*meta.Column) (*csvWriter, error) {
 func (c *csvWriter) row(vals []any) error {
 	for i, v := range vals {
 		if i > 0 {
-			c.w.WriteByte(',')
+			c.w.WriteByte(c.sep)
 		}
 		if v == nil {
 			continue
 		}
 		s := text(v)
-		if s == "" || strings.ContainsAny(s, ",\"\r\n") || s[0] == ' ' || s[len(s)-1] == ' ' {
+		if c.excel && isNumber(v) {
+			s = strings.Replace(s, ".", ",", 1)
+		}
+		if s == "" || strings.ContainsAny(s, string(c.sep)+"\"\r\n") || s[0] == ' ' || s[len(s)-1] == ' ' {
 			s = `"` + strings.ReplaceAll(s, `"`, `""`) + `"`
 		}
 		c.w.WriteString(s)
@@ -87,6 +101,15 @@ func (c *csvWriter) row(vals []any) error {
 }
 
 func (c *csvWriter) flush() error { return nil }
+
+// isNumber reports whether v is a number with a possible decimal point.
+func isNumber(v any) bool {
+	switch v.(type) {
+	case value.Decimal, value.BigDecimal, value.DecFloat, float32, float64:
+		return true
+	}
+	return false
+}
 
 // JSON Lines: one object per row, keys in column order. Exact numbers are
 // JSON numbers written digit for digit; dates, times and binary data are

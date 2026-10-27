@@ -24,6 +24,7 @@ type Options struct {
 	Tables         []string // export only these tables (exact names); all if empty
 	IncludeDeleted bool     // also write deleted rows still on disk, to <table>.deleted.<format>
 	AllVersions    bool     // also write every record version on disk, to <table>.versions.<format>
+	Excel          bool     // CSV for a double-click in Excel: UTF-8 BOM, ';' between fields, decimal comma
 	Value          value.Options
 }
 
@@ -198,21 +199,21 @@ type output struct {
 	w  rowWriter
 }
 
-func openOutput(path, format string, t *meta.Table, cols []*meta.Column, blobs blobSink) (*output, error) {
+func openOutput(path string, opt Options, t *meta.Table, cols []*meta.Column, blobs blobSink) (*output, error) {
 	f, err := os.Create(path)
 	if err != nil {
 		return nil, err
 	}
 	o := &output{f: f, bw: bufio.NewWriterSize(f, 1<<16)}
-	switch format {
+	switch opt.Format {
 	case "csv":
-		o.w, err = newCSV(o.bw, cols)
+		o.w, err = newCSV(o.bw, cols, opt.Excel)
 	case "sql":
 		o.w, err = newSQL(o.bw, t, cols, blobs)
 	case "jsonl":
 		o.w, err = newJSONL(o.bw, cols)
 	default:
-		err = fmt.Errorf("unknown format %q", format)
+		err = fmt.Errorf("unknown format %q", opt.Format)
 	}
 	if err != nil {
 		f.Close()
@@ -245,7 +246,7 @@ func exportTable(cat *meta.Catalog, t *meta.Table, opt Options, tr *TableResult,
 
 	base := strings.TrimSuffix(tr.File, "."+opt.Format)
 	blobs := &blobFiles{dir: filepath.Join(opt.Dir, base+".blobs"), rel: base + ".blobs"}
-	out, err := openOutput(filepath.Join(opt.Dir, tr.File), opt.Format, t, cols, blobs)
+	out, err := openOutput(filepath.Join(opt.Dir, tr.File), opt, t, cols, blobs)
 	if err != nil {
 		return err
 	}
@@ -263,7 +264,7 @@ func exportTable(cat *meta.Catalog, t *meta.Table, opt Options, tr *TableResult,
 		vt := versionsTable(t, cols)
 		tr.VersionsFile = base + ".versions." + opt.Format
 		vblobs := &blobFiles{dir: filepath.Join(opt.Dir, base+".versions.blobs"), rel: base + ".versions.blobs"}
-		if versions, err = openOutput(filepath.Join(opt.Dir, tr.VersionsFile), opt.Format, vt, vt.Columns, vblobs); err != nil {
+		if versions, err = openOutput(filepath.Join(opt.Dir, tr.VersionsFile), opt, vt, vt.Columns, vblobs); err != nil {
 			return err
 		}
 		if opt.Format == "sql" {
@@ -376,7 +377,7 @@ func exportTable(cat *meta.Catalog, t *meta.Table, opt Options, tr *TableResult,
 			if deleted == nil {
 				tr.DeletedFile = base + ".deleted." + opt.Format
 				dblobs := &blobFiles{dir: filepath.Join(opt.Dir, base+".deleted.blobs"), rel: base + ".deleted.blobs"}
-				if deleted, err = openOutput(filepath.Join(opt.Dir, tr.DeletedFile), opt.Format, t, cols, dblobs); err != nil {
+				if deleted, err = openOutput(filepath.Join(opt.Dir, tr.DeletedFile), opt, t, cols, dblobs); err != nil {
 					return err
 				}
 			}
