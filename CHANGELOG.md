@@ -3,12 +3,17 @@
 Each version's section is also its release notes on GitHub
 (`tools/release/notes.sh`).
 
-## Unreleased
+## v0.5.0 — 2026-10-27
+
+CSV for Excel, and the site in Portuguese.
 
 - **`export --excel`**: CSV that Excel opens by double-click where the
   decimal separator is a comma (Brazil, Russia, most of Europe) — a UTF-8
   BOM, `;` between fields and a decimal comma in numbers; text, dates and
   times unchanged ([#15](https://github.com/formeo/fbrescue/issues/15)).
+- **Site in three languages.** The recovery guide, the error pages, the FAQ
+  and the comparison are now also in Brazilian Portuguese, at
+  https://formeo.github.io/fbrescue/pt/.
 
 ## v0.4.0 — 2026-10-16
 
