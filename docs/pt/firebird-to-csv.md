@@ -35,6 +35,10 @@ Use `--table NOME` (pode repetir) para exportar só algumas tabelas. Se um servi
 
 Com dois cliques no CSV, o Excel adivinha a codificação e o separador: no Brasil ele espera ponto e vírgula, então todas as colunas caem numa só, e os acentos quebram. Em vez disso: **Dados → De Texto/CSV**, escolha o arquivo, defina *Origem do Arquivo* como **65001: Unicode (UTF-8)** e *Delimitador* como **Vírgula**, depois **Carregar**. Os números usam ponto decimal: se o Excel os deixar como texto, clique em **Transformar Dados** e, na coluna, use **Alterar Tipo → Usando a Localidade…** com **Inglês (Estados Unidos)**. O LibreOffice Calc pergunta o mesmo na sua janela de importação.
 
+### Com dois cliques: `--excel`
+
+Onde o Excel usa vírgula decimal (Brasil, Rússia, boa parte da Europa), `fbrescue export antigo.fdb --out dados --excel` grava um CSV que abre com dois cliques: BOM UTF-8 para o Excel reconhecer a codificação, `;` entre os campos e vírgula decimal nos números (textos, datas e horas não mudam). Com dois cliques não dá para escolher o tipo da coluna, então duas coisas mudam no caminho: códigos guardados como texto que parecem números (`00123`, CEP, CPF) perdem os zeros à esquerda, e números com mais de 15 dígitos (ids `BIGINT`, `NUMERIC(18)`) perdem precisão. Para essas colunas use a importação acima, com a coluna como *Texto*.
+
 ## Outros formatos
 
 - `--format jsonl`: um objeto JSON por linha, números exatos como números JSON — o mais fácil para Python, Node ou `jq`.

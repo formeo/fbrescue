@@ -93,7 +93,7 @@ func runTables(a cliArgs, stdout, stderr io.Writer) int {
 }
 
 func runExport(a cliArgs, stdout, stderr io.Writer) int {
-	opt := export.Options{Format: a.format, Dir: a.out, Tables: a.tables, IncludeDeleted: a.includeDeleted, AllVersions: a.versions == "all"}
+	opt := export.Options{Format: a.format, Dir: a.out, Tables: a.tables, IncludeDeleted: a.includeDeleted, AllVersions: a.versions == "all", Excel: a.excel}
 	if a.charset != "" {
 		id, ok := value.CharsetByName(a.charset)
 		if !ok || !value.Decodable(id) {
