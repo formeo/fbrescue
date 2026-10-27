@@ -9,7 +9,7 @@ Open-source Firebird recovery tool: read-only data recovery for Firebird 2.5–5
 
 `fbrescue` reads `.fdb` / `.gdb` files directly, without the Firebird engine, and gets data out of databases that `gbak` cannot back up. **It never modifies the source file.**
 
-> **Status: v0.4.** `info` and `scan` analyze a database; `tables` and `export` get the schema and the data out without the engine — from intact databases, and from damaged ones as far as the pages allow ([recovery rate](#recovery-rate)); `page` shows a single page; `report` makes a diagnostic report without data. Not exported yet: arrays and records with 48-bit transaction numbers — reported, never silently dropped. On a damaged database, work on a copy and try `gfix` and `gbak` first: they are the engine's own tools.
+> **Status: v0.5.** `info` and `scan` analyze a database; `tables` and `export` get the schema and the data out without the engine — from intact databases, and from damaged ones as far as the pages allow ([recovery rate](#recovery-rate)); `page` shows a single page; `report` makes a diagnostic report without data. Not exported yet: arrays and records with 48-bit transaction numbers — reported, never silently dropped. On a damaged database, work on a copy and try `gfix` and `gbak` first: they are the engine's own tools.
 
 ## When to use it
 
@@ -30,7 +30,7 @@ Download the archive for your system from [Releases](https://github.com/formeo/f
 
 ```
 sha256sum -c SHA256SUMS --ignore-missing
-gh attestation verify fbrescue_v0.4.0_windows_amd64.zip -R formeo/fbrescue
+gh attestation verify fbrescue_v0.5.0_windows_amd64.zip -R formeo/fbrescue
 ```
 
 With Go 1.24 or later: `go install github.com/formeo/fbrescue/cmd/fbrescue@latest`.
@@ -120,6 +120,7 @@ Rows on a page that is zeroed or cut off are gone; the rest is recovered. The te
 | v0.2 | `export` of intact databases: core types, CSV and SQL, `tables` |
 | v0.3 | BLOBs, record versions, deleted rows, Firebird 4 types, `page` |
 | v0.4 | damaged databases: page structure rebuilt from the pages, published recovery rate, `--ddl`, `report`, `--versions all` |
+| v0.5 | `export --excel`; site in English, Russian and Portuguese |
 | v1.0 | load into a new database, stable JSON reports, package managers |
 
 ## How correctness is checked
