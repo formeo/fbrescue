@@ -159,7 +159,7 @@ func (c *Catalog) profile(rel uint16) profile {
 	p := profile{sizes: map[int]bool{}}
 	byFormat := map[uint16]map[int]bool{}
 	n := 0
-	c.Records(rel, func(v Version, rec []byte, err error) error {
+	_ = c.Records(rel, func(v Version, rec []byte, err error) error {
 		if err != nil || rec == nil || v.Header.Flags&record.FlagDeleted != 0 {
 			return nil
 		}

@@ -49,7 +49,7 @@ func (c *Catalog) systemScore() int {
 	f := systemFormat(relRelations, c.db)
 	matched := 0
 	defer func(w []string) { c.Warnings = w }(c.Warnings) // already reported by load
-	c.visible(relRelations, func(v Version, rec []byte) {
+	_ = c.visible(relRelations, func(v Version, rec []byte) {
 		if n, ok := names[intField(rec, f["RELATION_ID"])]; ok && textField(rec, f["RELATION_NAME"]) == n {
 			matched++
 		}

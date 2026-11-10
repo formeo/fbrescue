@@ -66,7 +66,7 @@ func Open(path string) (*File, error) {
 	}
 	db := &File{}
 	if err := db.init(path, f); err != nil {
-		f.Close()
+		_ = f.Close()
 		return nil, err
 	}
 	return db, nil
@@ -110,7 +110,7 @@ func (db *File) init(path string, f *os.File) error {
 		}
 		buf := make([]byte, db.PageSize)
 		if _, err := cf.ReadAt(buf, 0); err != nil {
-			cf.Close()
+			_ = cf.Close()
 			db.warn("secondary file %s: %v", cpath, err)
 			break
 		}
@@ -160,7 +160,7 @@ func openContinuation(mainPath, stored string) (string, *os.File, int64, error) 
 		}
 		size, err := fileSize(f)
 		if err != nil {
-			f.Close()
+			_ = f.Close()
 			lastErr = err
 			continue
 		}
