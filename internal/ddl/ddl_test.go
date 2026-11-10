@@ -42,7 +42,7 @@ func TestLayoutMatchesFormats(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer f.Close()
+			defer func() { _ = f.Close() }()
 			cat, err := meta.Load(f)
 			if err != nil {
 				t.Skip(err) // hiwords

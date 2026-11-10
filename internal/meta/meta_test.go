@@ -19,7 +19,7 @@ func TestCatalogMatchesGstat(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer f.Close()
+			defer func() { _ = f.Close() }()
 			if db.Name == "hiwords" {
 				return // header patched to transaction numbers the inventory never saw
 			}
@@ -103,7 +103,7 @@ func TestRolledBackVersions(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer f.Close()
+			defer func() { _ = f.Close() }()
 			c, err := Load(f)
 			if err != nil {
 				t.Fatal(err)
@@ -115,7 +115,7 @@ func TestRolledBackVersions(t *testing.T) {
 				}
 			}
 			var dead, deadWithOlder int
-			c.Records(rb.ID, func(v Version, rec []byte, err error) error {
+			_ = c.Records(rb.ID, func(v Version, rec []byte, err error) error {
 				if ok, _ := c.Committed(v.Header.Tx); !ok {
 					dead++
 					if v.Header.BackPage != 0 {
