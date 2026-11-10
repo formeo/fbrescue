@@ -76,10 +76,10 @@ type reportTable struct {
 func runReport(a cliArgs, stdout, stderr io.Writer) int {
 	db, err := fdb.Open(a.path)
 	if err != nil {
-		fmt.Fprintf(stderr, "fbrescue report: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "fbrescue report: %v\n", err)
 		return 1
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	r := report{Tool: "fbrescue " + version, Tables: []reportTable{}, Catalog: reportCatalog{Warnings: []string{}}}
 	r.File = reportFile{Files: len(db.Files), PageSize: db.PageSize, Pages: db.Pages}
@@ -160,7 +160,7 @@ func dryExport(cat *meta.Catalog) (*reportExport, []reportTable, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	defer os.RemoveAll(dir)
+	defer func() { _ = os.RemoveAll(dir) }()
 	res, err := export.Run(cat, export.Options{Format: "csv", Dir: dir, IncludeDeleted: true}, nil)
 	if err != nil {
 		return nil, nil, err
@@ -191,7 +191,7 @@ func dryExport(cat *meta.Catalog) (*reportExport, []reportTable, error) {
 				e.Reasons[l.Reason]++
 			}
 		}
-		f.Close()
+		_ = f.Close()
 	}
 	return e, tables, nil
 }
