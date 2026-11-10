@@ -103,13 +103,13 @@ func Run(cat *meta.Catalog, opt Options, progress func(*TableResult)) (*Result, 
 	if err != nil {
 		return nil, err
 	}
-	defer schema.Close()
+	defer func() { _ = schema.Close() }()
 	if err := WriteSchema(schema, tables); err != nil {
 		return nil, err
 	}
 
 	errPath := filepath.Join(opt.Dir, "_errors.jsonl")
-	os.Remove(errPath) // from an earlier run into the same directory
+	_ = os.Remove(errPath) // from an earlier run into the same directory
 	var errFile *os.File
 	logError := func(e ErrorLine) error {
 		if errFile == nil {
@@ -124,7 +124,7 @@ func Run(cat *meta.Catalog, opt Options, progress func(*TableResult)) (*Result, 
 	}
 	defer func() {
 		if errFile != nil {
-			errFile.Close()
+			_ = errFile.Close()
 		}
 	}()
 
@@ -216,7 +216,7 @@ func openOutput(path string, opt Options, t *meta.Table, cols []*meta.Column, bl
 		err = fmt.Errorf("unknown format %q", opt.Format)
 	}
 	if err != nil {
-		f.Close()
+		_ = f.Close()
 		return nil, err
 	}
 	return o, nil
@@ -250,14 +250,14 @@ func exportTable(cat *meta.Catalog, t *meta.Table, opt Options, tr *TableResult,
 	if err != nil {
 		return err
 	}
-	defer out.f.Close()
+	defer func() { _ = out.f.Close() }()
 	var deleted, versions *output
 	defer func() {
 		if deleted != nil {
-			deleted.f.Close()
+			_ = deleted.f.Close()
 		}
 		if versions != nil {
-			versions.f.Close()
+			_ = versions.f.Close()
 		}
 	}()
 	if opt.AllVersions {
@@ -306,7 +306,6 @@ func exportTable(cat *meta.Catalog, t *meta.Table, opt Options, tr *TableResult,
 			switch {
 			case err == errNoDefault:
 				noDflt[c.Name]++
-				err = nil
 			case err != nil:
 				return fmt.Sprintf("column %s: %v", c.Name, err), nil
 			}
@@ -496,12 +495,12 @@ func resolve(cat *meta.Catalog, x any, opt value.Options) (any, error) {
 // WriteSchema writes CREATE TABLE statements for the tables.
 func WriteSchema(w io.Writer, tables []*meta.Table) error {
 	bw := bufio.NewWriter(w)
-	fmt.Fprintln(bw, "-- Tables recovered by fbrescue. Types come from the stored record format:")
-	fmt.Fprintln(bw, "-- NUMERIC/DECIMAL precision is the maximum for the storage size. Constraints,")
-	fmt.Fprintln(bw, "-- indexes, triggers and domains are not included.")
-	fmt.Fprintln(bw, "-- Create the database with SQL dialect 3, then: isql -ch UTF8 -i schema.sql <database>")
+	_, _ = fmt.Fprintln(bw, "-- Tables recovered by fbrescue. Types come from the stored record format:")
+	_, _ = fmt.Fprintln(bw, "-- NUMERIC/DECIMAL precision is the maximum for the storage size. Constraints,")
+	_, _ = fmt.Fprintln(bw, "-- indexes, triggers and domains are not included.")
+	_, _ = fmt.Fprintln(bw, "-- Create the database with SQL dialect 3, then: isql -ch UTF8 -i schema.sql <database>")
 	for _, t := range tables {
-		fmt.Fprintf(bw, "\nCREATE TABLE %s (\n", quote(t.Name))
+		_, _ = fmt.Fprintf(bw, "\nCREATE TABLE %s (\n", quote(t.Name))
 		var lines []string
 		for _, c := range t.Columns {
 			ok, why := Exported(c)
@@ -535,11 +534,11 @@ func WriteSchema(w io.Writer, tables []*meta.Table) error {
 					l += ","
 				}
 			}
-			fmt.Fprintln(bw, l)
+			_, _ = fmt.Fprintln(bw, l)
 		}
-		fmt.Fprintln(bw, ");")
+		_, _ = fmt.Fprintln(bw, ");")
 	}
-	fmt.Fprintln(bw, "\nCOMMIT;")
+	_, _ = fmt.Fprintln(bw, "\nCOMMIT;")
 	return bw.Flush()
 }
 

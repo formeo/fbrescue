@@ -265,7 +265,7 @@ func (p *parser) alterTable(name token, rest []token) error {
 			if err := p.element(t, el[1:]); err != nil {
 				return fmt.Errorf("ALTER TABLE %s: %w", name.s, err)
 			}
-		case len(el) >= 1 && el[0].is("DROP", "ALTER") && !(len(el) >= 2 && el[1].is("CONSTRAINT")):
+		case len(el) >= 1 && el[0].is("DROP", "ALTER") && (len(el) < 2 || !el[1].is("CONSTRAINT")):
 			// The engine keeps a dropped or changed column's field id and
 			// stores older records with older layouts: not derivable here.
 			p.warn("table %s is left out: after ALTER TABLE ... %s its record layout cannot be derived from a script", name.s, el[0].s)

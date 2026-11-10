@@ -59,21 +59,21 @@ func main() {
 
 func run(args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprint(stderr, usage)
+		_, _ = fmt.Fprint(stderr, usage)
 		return 1
 	}
 	cmd, rest := args[0], args[1:]
-	switch {
-	case cmd == "-h" || cmd == "--help" || cmd == "help":
-		fmt.Fprint(stdout, usage)
+	switch cmd {
+	case "-h", "--help", "help":
+		_, _ = fmt.Fprint(stdout, usage)
 		return 0
-	case cmd == "version":
-		fmt.Fprintln(stdout, "fbrescue", version)
+	case "version":
+		_, _ = fmt.Fprintln(stdout, "fbrescue", version)
 		return 0
-	case cmd == "info" || cmd == "scan" || cmd == "tables" || cmd == "export" || cmd == "page" || cmd == "report":
+	case "info", "scan", "tables", "export", "page", "report":
 		a, err := parseArgs(cmd, rest)
 		if err != nil {
-			fmt.Fprintf(stderr, "fbrescue %s: %v\n", cmd, err)
+			_, _ = fmt.Fprintf(stderr, "fbrescue %s: %v\n", cmd, err)
 			return 1
 		}
 		switch cmd {
@@ -90,7 +90,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 		}
 		return runExport(a, stdout, stderr)
 	default:
-		fmt.Fprintf(stderr, "fbrescue: unknown command %q\n\n%s", cmd, usage)
+		_, _ = fmt.Fprintf(stderr, "fbrescue: unknown command %q\n\n%s", cmd, usage)
 		return 1
 	}
 }
@@ -135,7 +135,7 @@ func parseArgs(cmd string, in []string) (cliArgs, error) {
 			continue
 		}
 		dst, ok := valued[name]
-		if !ok || cmd != "export" && !(cmd == "tables" && name == "ddl") {
+		if !ok || cmd != "export" && (cmd != "tables" || name != "ddl") {
 			return a, fmt.Errorf("unknown option %s", arg)
 		}
 		if !hasVal {
@@ -181,7 +181,7 @@ func parseArgs(cmd string, in []string) (cliArgs, error) {
 func writeJSON(w io.Writer, v any) {
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
-	enc.Encode(v)
+	_ = enc.Encode(v)
 }
 
 func humanSize(n int64) string {

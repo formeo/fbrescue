@@ -25,10 +25,10 @@ const recoverySeeds = 10
 // is counted as reported when export logged a value it could not read
 // (and wrote as NULL) in that trial; the rest are silent.
 type tally struct {
-	trials, failed, panics                  int
-	rows, correct, missing, extra           int
-	changedReported, changedSilent, colErrs int
-	ddlCorrect, ddlWrong                    int // the same with --ddl (wrong: silently changed or extra)
+	trials, failed, panics         int
+	rows, correct, missing, extra  int
+	changedReported, changedSilent int
+	ddlCorrect, ddlWrong           int // the same with --ddl (wrong: silently changed or extra)
 }
 
 // Recovery the tests insist on, per kind of damage: the share of rows
@@ -60,7 +60,9 @@ func TestRecovery(t *testing.T) {
 		t.Fatal(err)
 	}
 	ddlPath := filepath.Join(t.TempDir(), "shop.sql")
-	os.WriteFile(ddlPath, append([]byte("/* CREATE DATABASE 'shop.fdb' DEFAULT CHARACTER SET UTF8; */\n"), script...), 0o644)
+	if err := os.WriteFile(ddlPath, append([]byte("/* CREATE DATABASE 'shop.fdb' DEFAULT CHARACTER SET UTF8; */\n"), script...), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	for _, db := range corpus.List(t) {
 		if db.Name != "shop" {
 			continue

@@ -19,7 +19,7 @@ func TestHeaderMatchesGstat(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer f.Close()
+			defer func() { _ = f.Close() }()
 			h := f.Header
 			if h == nil {
 				t.Fatalf("header not parsed; warnings: %v", f.Warnings)
@@ -80,7 +80,7 @@ func TestMultiFile(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer f.Close()
+			defer func() { _ = f.Close() }()
 			if len(f.Files) != 2 || f.Files[1].Path != second {
 				t.Fatalf("files = %+v", f.Files)
 			}
@@ -113,7 +113,7 @@ func TestDamagedHeaderDetectsPageSize(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer f.Close()
+			defer func() { _ = f.Close() }()
 			if want := db.Gstat("Page size"); fmt.Sprint(f.PageSize) != want {
 				t.Errorf("detected page size %d, want %s", f.PageSize, want)
 			}
@@ -143,7 +143,7 @@ func TestTruncatedFileOpens(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer f.Close()
+			defer func() { _ = f.Close() }()
 			if want := uint32(st.Size()/int64(f.PageSize)) - 1; f.Pages != want {
 				t.Errorf("pages = %d, want %d", f.Pages, want)
 			}
@@ -173,7 +173,7 @@ func overwrite(t *testing.T, path string, off int64, b []byte) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	if _, err := f.WriteAt(b, off); err != nil {
 		t.Fatal(err)
 	}

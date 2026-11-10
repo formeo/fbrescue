@@ -17,7 +17,7 @@ func scanFile(t *testing.T, path string) (*fdb.File, *Report) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { f.Close() })
+	t.Cleanup(func() { _ = f.Close() })
 	return f, Run(f, nil)
 }
 
@@ -286,7 +286,7 @@ func writeAt(t *testing.T, path string, off int64, data []byte) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	if _, err := f.WriteAt(data, off); err != nil {
 		t.Fatal(err)
 	}

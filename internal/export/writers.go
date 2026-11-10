@@ -70,7 +70,7 @@ func newCSV(w *bufio.Writer, cols []*meta.Column, excel bool) (*csvWriter, error
 	c := &csvWriter{w: w, excel: excel, sep: ','}
 	if excel {
 		c.sep = ';'
-		w.WriteString("\uFEFF")
+		_, _ = w.WriteString("\uFEFF")
 	}
 	names := make([]any, len(cols))
 	for i, col := range cols {
@@ -82,7 +82,7 @@ func newCSV(w *bufio.Writer, cols []*meta.Column, excel bool) (*csvWriter, error
 func (c *csvWriter) row(vals []any) error {
 	for i, v := range vals {
 		if i > 0 {
-			c.w.WriteByte(c.sep)
+			_ = c.w.WriteByte(c.sep)
 		}
 		if v == nil {
 			continue
@@ -94,7 +94,7 @@ func (c *csvWriter) row(vals []any) error {
 		if s == "" || strings.ContainsAny(s, string(c.sep)+"\"\r\n") || s[0] == ' ' || s[len(s)-1] == ' ' {
 			s = `"` + strings.ReplaceAll(s, `"`, `""`) + `"`
 		}
-		c.w.WriteString(s)
+		_, _ = c.w.WriteString(s)
 	}
 	_, err := c.w.WriteString("\r\n")
 	return err
@@ -132,20 +132,20 @@ func newJSONL(w *bufio.Writer, cols []*meta.Column) (*jsonlWriter, error) {
 }
 
 func (j *jsonlWriter) row(vals []any) error {
-	j.w.WriteByte('{')
+	_ = j.w.WriteByte('{')
 	for i, v := range vals {
-		j.w.Write(j.keys[i])
+		_, _ = j.w.Write(j.keys[i])
 		switch x := v.(type) {
 		case nil:
-			j.w.WriteString("null")
+			_, _ = j.w.WriteString("null")
 		case value.Decimal, value.BigDecimal, bool:
-			j.w.WriteString(text(x))
+			_, _ = j.w.WriteString(text(x))
 		case value.DecFloat:
 			if strings.ContainsAny(string(x), "IN") { // Infinity, NaN
 				b, _ := json.Marshal(string(x))
-				j.w.Write(b)
+				_, _ = j.w.Write(b)
 			} else {
-				j.w.WriteString(string(x))
+				_, _ = j.w.WriteString(string(x))
 			}
 		case float32:
 			j.number(float64(x), text(x))
@@ -153,7 +153,7 @@ func (j *jsonlWriter) row(vals []any) error {
 			j.number(x, text(x))
 		default:
 			b, _ := json.Marshal(text(x))
-			j.w.Write(b)
+			_, _ = j.w.Write(b)
 		}
 	}
 	_, err := j.w.WriteString("}\n")
@@ -163,10 +163,10 @@ func (j *jsonlWriter) row(vals []any) error {
 func (j *jsonlWriter) number(f float64, s string) {
 	if math.IsNaN(f) || math.IsInf(f, 0) {
 		b, _ := json.Marshal(s)
-		j.w.Write(b)
+		_, _ = j.w.Write(b)
 		return
 	}
-	j.w.WriteString(s)
+	_, _ = j.w.WriteString(s)
 }
 
 func (j *jsonlWriter) flush() error { return nil }
@@ -219,17 +219,17 @@ func newSQL(w *bufio.Writer, t *meta.Table, cols []*meta.Column, blobs blobSink)
 	for i, c := range cols {
 		names[i] = quote(c.Name)
 	}
-	fmt.Fprintf(w, "-- Rows of %s recovered by fbrescue. Load after schema.sql: isql -ch UTF8 -i <this file> <database>\n", t.Name)
+	_, _ = fmt.Fprintf(w, "-- Rows of %s recovered by fbrescue. Load after schema.sql: isql -ch UTF8 -i <this file> <database>\n", t.Name)
 	return &sqlWriter{w: w, prefix: "INSERT INTO " + quote(t.Name) + " (" + strings.Join(names, ", ") + ") VALUES (", cols: cols, blobs: blobs}, nil
 }
 
 func (s *sqlWriter) row(vals []any) error {
 	s.n++
 	var notes []string
-	s.w.WriteString(s.prefix)
+	_, _ = s.w.WriteString(s.prefix)
 	for i, v := range vals {
 		if i > 0 {
-			s.w.WriteString(", ")
+			_, _ = s.w.WriteString(", ")
 		}
 		f := s.cols[i].Field
 		if f.DType == value.TypeBlob && size(v) > blobInlineLimit {
@@ -238,19 +238,19 @@ func (s *sqlWriter) row(vals []any) error {
 			if err != nil {
 				return err
 			}
-			s.w.WriteString("NULL")
+			_, _ = s.w.WriteString("NULL")
 			notes = append(notes, fmt.Sprintf("%s: %d bytes in %s", s.cols[i].Name, len(data), path))
 			continue
 		}
-		s.w.WriteString(literalFor(v, f))
+		_, _ = s.w.WriteString(literalFor(v, f))
 	}
-	s.w.WriteString(");")
+	_, _ = s.w.WriteString(");")
 	if len(notes) > 0 {
-		s.w.WriteString(" -- " + strings.Join(notes, "; "))
+		_, _ = s.w.WriteString(" -- " + strings.Join(notes, "; "))
 	}
-	s.w.WriteString("\n")
+	_, _ = s.w.WriteString("\n")
 	if s.n%commitEvery == 0 {
-		s.w.WriteString("COMMIT;\n")
+		_, _ = s.w.WriteString("COMMIT;\n")
 	}
 	return nil
 }

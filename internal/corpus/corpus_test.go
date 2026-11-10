@@ -19,7 +19,7 @@ func TestCorpusMatchesGstat(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer f.Close()
+			defer func() { _ = f.Close() }()
 			hdr := make([]byte, 0x14)
 			if _, err := f.ReadAt(hdr, 0); err != nil {
 				t.Fatal(err)

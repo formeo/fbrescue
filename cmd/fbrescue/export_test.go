@@ -411,11 +411,11 @@ func TestExportBlobContents(t *testing.T) {
 					if len(s) == 0 {
 						continue
 					}
-					q.WriteString(fmt.Sprintf("char_length(%s) L%d, ", col, i))
+					fmt.Fprintf(&q, "char_length(%s) L%d, ", col, i)
 					want = append(want, fmt.Sprintf("L%d %d", i, len(s)))
 					for k, at := range []int{0, len(s) / 2, max(len(s)-30, 0)} {
 						n := min(30, len(s)-at)
-						q.WriteString(fmt.Sprintf("replace(cast(substring(%s from %d for %d) as varchar(30)), ascii_char(10), '~') S%d%d, ", col, at+1, n, i, k))
+						fmt.Fprintf(&q, "replace(cast(substring(%s from %d for %d) as varchar(30)), ascii_char(10), '~') S%d%d, ", col, at+1, n, i, k)
 						want = append(want, fmt.Sprintf("S%d%d %s", i, k, strings.ReplaceAll(string(s[at:at+n]), "\n", "~")))
 					}
 				}
@@ -427,7 +427,7 @@ func TestExportBlobContents(t *testing.T) {
 					// binary content on 3.0+ (hash).
 					if db.Engine != "fb25" {
 						at := len(b) / 2
-						q.WriteString(fmt.Sprintf("cast(substring(bin from %d for 8) as varchar(8) character set octets) SB, ", at+1))
+						fmt.Fprintf(&q, "cast(substring(bin from %d for 8) as varchar(8) character set octets) SB, ", at+1)
 						want = append(want, "SB "+strings.ToUpper(hex.EncodeToString(b[at:min(at+8, len(b))])))
 					}
 				}
@@ -517,7 +517,9 @@ func TestExportWithDDL(t *testing.T) {
 		t.Fatal(err)
 	}
 	ddlPath := filepath.Join(t.TempDir(), "shop.sql")
-	os.WriteFile(ddlPath, append([]byte("/* CREATE DATABASE 'shop.fdb' DEFAULT CHARACTER SET UTF8; */\n"), script...), 0o644)
+	if err := os.WriteFile(ddlPath, append([]byte("/* CREATE DATABASE 'shop.fdb' DEFAULT CHARACTER SET UTF8; */\n"), script...), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	tables := []string{"CUSTOMERS", "ORDERS", "ITEMS"}
 	for _, db := range corpus.List(t) {
 		if db.Name != "shop" {
@@ -542,7 +544,9 @@ func TestExportWithDDL(t *testing.T) {
 				}
 				dir := t.TempDir()
 				path := filepath.Join(dir, "shop.fdb")
-				os.WriteFile(path, orig, 0o644)
+				if err := os.WriteFile(path, orig, 0o644); err != nil {
+					t.Fatal(err)
+				}
 
 				got := filepath.Join(dir, "out")
 				out.Reset()

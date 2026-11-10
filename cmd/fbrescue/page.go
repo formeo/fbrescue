@@ -60,18 +60,18 @@ var txStates = map[int]string{meta.TxActive: "active", meta.TxLimbo: "limbo", me
 func runPage(a cliArgs, stdout, stderr io.Writer) int {
 	n, err := strconv.ParseUint(a.pageNo, 10, 32)
 	if err != nil {
-		fmt.Fprintf(stderr, "fbrescue page: page number %q: %v\n", a.pageNo, err)
+		_, _ = fmt.Fprintf(stderr, "fbrescue page: page number %q: %v\n", a.pageNo, err)
 		return 1
 	}
 	db, err := fdb.Open(a.path)
 	if err != nil {
-		fmt.Fprintf(stderr, "fbrescue page: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "fbrescue page: %v\n", err)
 		return 1
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	buf := make([]byte, db.PageSize)
 	if err := db.ReadPage(uint32(n), buf); err != nil {
-		fmt.Fprintf(stderr, "fbrescue page: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "fbrescue page: %v\n", err)
 		return 1
 	}
 	// Names and values need the catalog; the page is shown without them if
@@ -127,33 +127,33 @@ func runPage(a cliArgs, stdout, stderr io.Writer) int {
 		writeJSON(stdout, p)
 		return 0
 	}
-	fmt.Fprintf(stdout, "Page %d: %s (type %d, flags %#02x)\n", p.Page, p.TypeName, p.Type, p.Flags)
+	_, _ = fmt.Fprintf(stdout, "Page %d: %s (type %d, flags %#02x)\n", p.Page, p.TypeName, p.Type, p.Flags)
 	if p.PageNumber != nil {
-		fmt.Fprintf(stdout, "Stored page number %d\n", *p.PageNumber)
+		_, _ = fmt.Fprintf(stdout, "Stored page number %d\n", *p.PageNumber)
 	}
 	for _, k := range []string{"relation", "table", "sequence", "next", "lead_page", "length", "states"} {
 		if v, ok := p.Fields[k]; ok && v != "" {
-			fmt.Fprintf(stdout, "%-10s %v\n", strings.ReplaceAll(k, "_", " "), v)
+			_, _ = fmt.Fprintf(stdout, "%-10s %v\n", strings.ReplaceAll(k, "_", " "), v)
 		}
 	}
 	if len(p.Pages) > 0 {
-		fmt.Fprintf(stdout, "data pages %v\n", p.Pages)
+		_, _ = fmt.Fprintf(stdout, "data pages %v\n", p.Pages)
 	}
 	for _, r := range p.Records {
-		fmt.Fprintf(stdout, "\nline %d  offset %d  length %d  tx %d %s  format %d  [%s]", r.Line, r.Offset, r.Length, r.Tx, r.TxState, r.Format, strings.Join(r.Flags, ", "))
+		_, _ = fmt.Fprintf(stdout, "\nline %d  offset %d  length %d  tx %d %s  format %d  [%s]", r.Line, r.Offset, r.Length, r.Tx, r.TxState, r.Format, strings.Join(r.Flags, ", "))
 		if r.Back != "" {
-			fmt.Fprintf(stdout, "  older version at %s", r.Back)
+			_, _ = fmt.Fprintf(stdout, "  older version at %s", r.Back)
 		}
-		fmt.Fprintln(stdout)
+		_, _ = fmt.Fprintln(stdout)
 		for _, kv := range sortedValues(r.Values) {
-			fmt.Fprintf(stdout, "    %s\n", kv)
+			_, _ = fmt.Fprintf(stdout, "    %s\n", kv)
 		}
 		if r.ValueErr != "" {
-			fmt.Fprintf(stdout, "    (%s)\n", r.ValueErr)
+			_, _ = fmt.Fprintf(stdout, "    (%s)\n", r.ValueErr)
 		}
 	}
 	for _, pr := range p.Problems {
-		fmt.Fprintf(stdout, "⚠ %s\n", pr)
+		_, _ = fmt.Fprintf(stdout, "⚠ %s\n", pr)
 	}
 	return 0
 }

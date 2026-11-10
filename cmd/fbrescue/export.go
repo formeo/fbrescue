@@ -21,19 +21,19 @@ func openCatalog(cmd string, a cliArgs, stderr io.Writer) (*fdb.File, *meta.Cata
 			defs, ddlWarnings, err = ddl.Parse(string(b))
 		}
 		if err != nil {
-			fmt.Fprintf(stderr, "fbrescue %s: --ddl %s: %v\n", cmd, a.ddl, err)
+			_, _ = fmt.Fprintf(stderr, "fbrescue %s: --ddl %s: %v\n", cmd, a.ddl, err)
 			return nil, nil, false
 		}
 	}
 	db, err := fdb.Open(a.path)
 	if err != nil {
-		fmt.Fprintf(stderr, "fbrescue %s: %v\n", cmd, err)
+		_, _ = fmt.Fprintf(stderr, "fbrescue %s: %v\n", cmd, err)
 		return nil, nil, false
 	}
 	cat, err := meta.Load(db)
 	if err != nil {
-		db.Close()
-		fmt.Fprintf(stderr, "fbrescue %s: %v\n", cmd, err)
+		_ = db.Close()
+		_, _ = fmt.Fprintf(stderr, "fbrescue %s: %v\n", cmd, err)
 		return nil, nil, false
 	}
 	for _, w := range ddlWarnings {
@@ -65,7 +65,7 @@ func runTables(a cliArgs, stdout, stderr io.Writer) int {
 	if !ok {
 		return 1
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	if a.json {
 		out := struct {
 			Tables   []tableJSON `json:"tables"`
@@ -83,11 +83,11 @@ func runTables(a cliArgs, stdout, stderr io.Writer) int {
 		return 0
 	}
 	if err := export.WriteSchema(stdout, cat.Tables); err != nil {
-		fmt.Fprintf(stderr, "fbrescue tables: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "fbrescue tables: %v\n", err)
 		return 1
 	}
 	for _, w := range append(warnings(db), cat.Warnings...) {
-		fmt.Fprintf(stderr, "⚠ %s\n", w)
+		_, _ = fmt.Fprintf(stderr, "⚠ %s\n", w)
 	}
 	return 0
 }
@@ -97,7 +97,7 @@ func runExport(a cliArgs, stdout, stderr io.Writer) int {
 	if a.charset != "" {
 		id, ok := value.CharsetByName(a.charset)
 		if !ok || !value.Decodable(id) {
-			fmt.Fprintf(stderr, "fbrescue export: unknown or unsupported character set %q\n", a.charset)
+			_, _ = fmt.Fprintf(stderr, "fbrescue export: unknown or unsupported character set %q\n", a.charset)
 			return 1
 		}
 		opt.Value.NoneCharset = id
@@ -106,7 +106,7 @@ func runExport(a cliArgs, stdout, stderr io.Writer) int {
 	if !ok {
 		return 1
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	progress := func(t *export.TableResult) {
 		if a.json {
@@ -116,24 +116,24 @@ func runExport(a cliArgs, stdout, stderr io.Writer) int {
 		if t.Skipped > 0 || len(t.Omitted) > 0 || t.Warned {
 			mark = "⚠"
 		}
-		fmt.Fprintf(stdout, "%-30s %10d rows  %s", t.Name, t.Rows, mark)
+		_, _ = fmt.Fprintf(stdout, "%-30s %10d rows  %s", t.Name, t.Rows, mark)
 		if t.Skipped > 0 {
-			fmt.Fprintf(stdout, " %d skipped", t.Skipped)
+			_, _ = fmt.Fprintf(stdout, " %d skipped", t.Skipped)
 		}
 		if len(t.Omitted) > 0 {
-			fmt.Fprintf(stdout, " %d columns left out", len(t.Omitted))
+			_, _ = fmt.Fprintf(stdout, " %d columns left out", len(t.Omitted))
 		}
 		if t.Deleted > 0 {
-			fmt.Fprintf(stdout, " + %d deleted rows in %s", t.Deleted, t.DeletedFile)
+			_, _ = fmt.Fprintf(stdout, " + %d deleted rows in %s", t.Deleted, t.DeletedFile)
 		}
 		if t.VersionsFile != "" {
-			fmt.Fprintf(stdout, " + %d versions in %s", t.Versions, t.VersionsFile)
+			_, _ = fmt.Fprintf(stdout, " + %d versions in %s", t.Versions, t.VersionsFile)
 		}
-		fmt.Fprintln(stdout)
+		_, _ = fmt.Fprintln(stdout)
 	}
 	res, err := export.Run(cat, opt, progress)
 	if err != nil {
-		fmt.Fprintf(stderr, "fbrescue export: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "fbrescue export: %v\n", err)
 		return 1
 	}
 	res.Warnings = append(warnings(db), res.Warnings...)
@@ -145,15 +145,15 @@ func runExport(a cliArgs, stdout, stderr io.Writer) int {
 		writeJSON(stdout, res)
 		return status
 	}
-	fmt.Fprintf(stdout, "Wrote %s: schema.sql and %d %s files\n", a.out, len(res.Tables), a.format)
+	_, _ = fmt.Fprintf(stdout, "Wrote %s: schema.sql and %d %s files\n", a.out, len(res.Tables), a.format)
 	if res.Errors > 0 {
-		fmt.Fprintf(stdout, "%d rows or pages could not be exported: details in _errors.jsonl\n", res.Errors)
+		_, _ = fmt.Fprintf(stdout, "%d rows or pages could not be exported: details in _errors.jsonl\n", res.Errors)
 	}
 	for _, w := range res.Warnings {
-		fmt.Fprintf(stdout, "⚠ %s\n", w)
+		_, _ = fmt.Fprintf(stdout, "⚠ %s\n", w)
 	}
 	for _, n := range res.Notes {
-		fmt.Fprintf(stdout, "  %s\n", n)
+		_, _ = fmt.Fprintf(stdout, "  %s\n", n)
 	}
 	return status
 }

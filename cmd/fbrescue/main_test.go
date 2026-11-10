@@ -54,7 +54,7 @@ func TestNeverWrites(t *testing.T) {
 				code := run(args, &out, &errOut)
 				// tables and export need an intact header and system tables:
 				// the hiwords header claims transactions the inventory lacks.
-				if code == 1 && !(db.Name == "hiwords" && (args[0] == "tables" || args[0] == "export")) {
+				if code == 1 && (db.Name != "hiwords" || args[0] != "tables" && args[0] != "export") {
 					t.Errorf("%v: exit 1: %s", args, errOut.String())
 				}
 			}
@@ -101,7 +101,9 @@ func TestExitCodesAndJSON(t *testing.T) {
 	// Truncated by part of a page: scan still works, but reports it.
 	b, _ := os.ReadFile(base)
 	damaged := filepath.Join(t.TempDir(), "damaged.fdb")
-	os.WriteFile(damaged, b[:len(b)-100], 0o644)
+	if err := os.WriteFile(damaged, b[:len(b)-100], 0o644); err != nil {
+		t.Fatal(err)
+	}
 	if code := run([]string{"scan", damaged}, &out, &errOut); code != 2 {
 		t.Errorf("damaged scan: exit %d, want 2", code)
 	}

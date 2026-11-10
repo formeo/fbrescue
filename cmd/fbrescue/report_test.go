@@ -36,7 +36,9 @@ func TestReportHasNoData(t *testing.T) {
 				continue
 			}
 			path := filepath.Join(t.TempDir(), "shop.fdb")
-			os.WriteFile(path, b, 0o644)
+			if err := os.WriteFile(path, b, 0o644); err != nil {
+				t.Fatal(err)
+			}
 			dbs = append(dbs, corpus.DB{Engine: db.Engine, Name: "shop, " + k.Name, Path: path})
 		}
 	}
