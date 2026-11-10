@@ -42,10 +42,10 @@ type headerJSON struct {
 func runInfo(path string, asJSON bool, stdout, stderr io.Writer) int {
 	db, err := fdb.Open(path)
 	if err != nil {
-		fmt.Fprintf(stderr, "fbrescue info: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "fbrescue info: %v\n", err)
 		return 1
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	out := infoJSON{PageSize: db.PageSize, Pages: db.Pages, Warnings: warnings(db)}
 	for _, p := range db.Files {
@@ -74,10 +74,10 @@ func runInfo(path string, asJSON bool, stdout, stderr io.Writer) int {
 			size += st.Size()
 		}
 	}
-	fmt.Fprintf(stdout, "File        %s · %s · %d pages × %d KB\n", filepath.Base(path), humanSize(size), db.Pages, db.PageSize/1024)
+	_, _ = fmt.Fprintf(stdout, "File        %s · %s · %d pages × %d KB\n", filepath.Base(path), humanSize(size), db.Pages, db.PageSize/1024)
 	if len(db.Files) > 1 {
 		for _, p := range db.Files {
-			fmt.Fprintf(stdout, "            %s: pages %d-%d\n", p.Path, p.FirstPage, p.FirstPage+p.Pages-1)
+			_, _ = fmt.Fprintf(stdout, "            %s: pages %d-%d\n", p.Path, p.FirstPage, p.FirstPage+p.Pages-1)
 		}
 	}
 	if h := out.Header; h != nil {
@@ -93,19 +93,19 @@ func runInfo(path string, asJSON bool, stdout, stderr io.Writer) int {
 		if attrs == "" {
 			attrs = "–"
 		}
-		fmt.Fprintf(stdout, "Engine      %s · dialect %d\n", engine, h.Dialect)
-		fmt.Fprintf(stdout, "Created     %s (%s)\n", h.Created, zone)
-		fmt.Fprintf(stdout, "Tx          OIT %d · OAT %d · OST %d · next %d\n", h.OIT, h.OAT, h.OST, h.NextTransaction)
-		fmt.Fprintf(stdout, "Attributes  %s\n", attrs)
+		_, _ = fmt.Fprintf(stdout, "Engine      %s · dialect %d\n", engine, h.Dialect)
+		_, _ = fmt.Fprintf(stdout, "Created     %s (%s)\n", h.Created, zone)
+		_, _ = fmt.Fprintf(stdout, "Tx          OIT %d · OAT %d · OST %d · next %d\n", h.OIT, h.OAT, h.OST, h.NextTransaction)
+		_, _ = fmt.Fprintf(stdout, "Attributes  %s\n", attrs)
 	} else {
 		family := "ODS 11 (Firebird 2.x)"
 		if db.Family == fdb.ODS12Plus {
 			family = "ODS 12 or later (Firebird 3.0+)"
 		}
-		fmt.Fprintf(stdout, "Engine      %s, detected from page layout\n", family)
+		_, _ = fmt.Fprintf(stdout, "Engine      %s, detected from page layout\n", family)
 	}
 	for _, w := range out.Warnings {
-		fmt.Fprintf(stdout, "⚠ %s\n", w)
+		_, _ = fmt.Fprintf(stdout, "⚠ %s\n", w)
 	}
 	return 0
 }

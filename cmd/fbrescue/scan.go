@@ -23,10 +23,10 @@ type scanJSON struct {
 func runScan(path string, asJSON bool, stdout, stderr io.Writer) int {
 	db, err := fdb.Open(path)
 	if err != nil {
-		fmt.Fprintf(stderr, "fbrescue scan: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "fbrescue scan: %v\n", err)
 		return 1
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	r := scan.Run(db, progressReporter(stderr))
 	warns := warnings(db)
@@ -39,7 +39,7 @@ func runScan(path string, asJSON bool, stdout, stderr io.Writer) int {
 		return status
 	}
 
-	fmt.Fprintf(stdout, "Pages         %d total · %d in use · %d free\n", r.Pages, r.UsedPages, r.FreePages)
+	_, _ = fmt.Fprintf(stdout, "Pages         %d total · %d in use · %d free\n", r.Pages, r.UsedPages, r.FreePages)
 	types := make([]string, 0, len(r.PageTypes))
 	for name := range r.PageTypes {
 		types = append(types, name)
@@ -51,12 +51,12 @@ func runScan(path string, asJSON bool, stdout, stderr io.Writer) int {
 	for i, name := range types {
 		parts[i] = fmt.Sprintf("%s %d", name, r.PageTypes[name])
 	}
-	fmt.Fprintf(stdout, "              %s\n", strings.Join(parts, " · "))
+	_, _ = fmt.Fprintf(stdout, "              %s\n", strings.Join(parts, " · "))
 	if tx := r.Transactions; tx != nil {
-		fmt.Fprintf(stdout, "Transactions  1-%d: committed %d · active %d · dead %d · limbo %d\n",
+		_, _ = fmt.Fprintf(stdout, "Transactions  1-%d: committed %d · active %d · dead %d · limbo %d\n",
 			tx.Next, tx.Committed, tx.Active, tx.Dead, tx.Limbo)
 	} else {
-		fmt.Fprintln(stdout, "Transactions  unknown (header page or transaction inventory damaged)")
+		_, _ = fmt.Fprintln(stdout, "Transactions  unknown (header page or transaction inventory damaged)")
 	}
 
 	// Names come from the system tables; on a database too damaged for
@@ -68,7 +68,7 @@ func runScan(path string, asJSON bool, stdout, stderr io.Writer) int {
 		}
 	}
 	var system, systemRecords int
-	fmt.Fprintf(stdout, "\n%-24s %13s %10s %10s %9s %9s\n", "Table", "Pointer pages", "Data pages", "Records", "Deleted", "Versions")
+	_, _ = fmt.Fprintf(stdout, "\n%-24s %13s %10s %10s %9s %9s\n", "Table", "Pointer pages", "Data pages", "Records", "Deleted", "Versions")
 	for _, rel := range r.Relations {
 		if rel.ID < 128 { // system tables
 			system++
@@ -79,24 +79,24 @@ func runScan(path string, asJSON bool, stdout, stderr io.Writer) int {
 		if name == "" {
 			name = fmt.Sprintf("#%d", rel.ID)
 		}
-		fmt.Fprintf(stdout, "%-24s %13d %10d %10d %9d %9d\n", name, rel.PointerPages, rel.DataPages, rel.Records, rel.Deleted, rel.Versions)
+		_, _ = fmt.Fprintf(stdout, "%-24s %13d %10d %10d %9d %9d\n", name, rel.PointerPages, rel.DataPages, rel.Records, rel.Deleted, rel.Versions)
 	}
-	fmt.Fprintf(stdout, "(%d system tables, %d records)\n\n", system, systemRecords)
+	_, _ = fmt.Fprintf(stdout, "(%d system tables, %d records)\n\n", system, systemRecords)
 
 	for _, w := range warns {
-		fmt.Fprintf(stdout, "⚠ %s\n", w)
+		_, _ = fmt.Fprintf(stdout, "⚠ %s\n", w)
 	}
 	if len(r.Problems) == 0 {
-		fmt.Fprintln(stdout, "No problems found.")
+		_, _ = fmt.Fprintln(stdout, "No problems found.")
 		return status
 	}
-	fmt.Fprintf(stdout, "%d problems:\n", len(r.Problems))
+	_, _ = fmt.Fprintf(stdout, "%d problems:\n", len(r.Problems))
 	for i, p := range r.Problems {
 		if i == maxProblemsShown {
-			fmt.Fprintf(stdout, "… and %d more (all of them with --json)\n", len(r.Problems)-i)
+			_, _ = fmt.Fprintf(stdout, "… and %d more (all of them with --json)\n", len(r.Problems)-i)
 			break
 		}
-		fmt.Fprintf(stdout, "  page %-9d %-18s %s\n", p.Page, p.Kind, p.Message)
+		_, _ = fmt.Fprintf(stdout, "  page %-9d %-18s %s\n", p.Page, p.Kind, p.Message)
 	}
 	return status
 }
@@ -113,9 +113,9 @@ func progressReporter(w io.Writer) func(done, total uint32) {
 	}
 	return func(done, total uint32) {
 		if done == total {
-			fmt.Fprint(w, "\r              \r")
+			_, _ = fmt.Fprint(w, "\r              \r")
 			return
 		}
-		fmt.Fprintf(w, "\rscanning %3d%%", uint64(done)*100/uint64(max(total, 1)))
+		_, _ = fmt.Fprintf(w, "\rscanning %3d%%", uint64(done)*100/uint64(max(total, 1)))
 	}
 }
