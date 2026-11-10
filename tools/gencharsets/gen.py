@@ -1,13 +1,27 @@
 #!/usr/bin/env python3
 """Generates internal/value/charsets_gen.go: Firebird character set ids,
 names, bytes per character, and the upper half (0x80-0xFF) of every
-single-byte character set, from Python's codecs. Undefined bytes map to
-U+FFFD. Run: python3 tools/gencharsets/gen.py > internal/value/charsets_gen.go
+single-byte character set, from Python's codecs and Firebird's NEXTSTEP table.
+Undefined bytes map to U+FFFD. Run:
+python3 tools/gencharsets/gen.py > internal/value/charsets_gen.go
 """
 import codecs
 
+# Firebird src/intl/charsets/cs_next.h, generated from NEXTSTEP.TXT.
+NEXT = [int(v, 16) for v in """
+00A0 00C0 00C1 00C2 00C3 00C4 00C5 00C7 00C8 00C9 00CA 00CB 00CC 00CD 00CE 00CF
+00D0 00D1 00D2 00D3 00D4 00D5 00D6 00D9 00DA 00DB 00DC 00DD 00DE 00B5 00D7 00F7
+00A9 00A1 00A2 00A3 2044 00A5 0192 00A7 00A4 2019 201C 00AB 2039 203A FB01 FB02
+00AE 2013 2020 2021 00B7 00A6 00B6 2022 201A 201E 201D 00BB 2026 2030 00AC 00BF
+00B9 02CB 00B4 02C6 02DC 00AF 02D8 02D9 00A8 00B2 02DA 00B8 00B3 02DD 02DB 02C7
+2014 00B1 00BC 00BD 00BE 00E0 00E1 00E2 00E3 00E4 00E5 00E7 00E8 00E9 00EA 00EB
+00EC 00C6 00ED 00AA 00EE 00EF 00F0 00F1 0141 00D8 0152 00BA 00F2 00F3 00F4 00F5
+00F6 00E6 00F9 00FA 00FB 0131 00FC 00FD 0142 00F8 0153 00DF 00FE 00FF FFFD FFFD
+""".split()]
+
 # id, Firebird name, bytes per character (from RDB$CHARACTER_SETS, identical
-# in Firebird 2.5-5.0), Python codec or None (no table: bytes pass through).
+# in Firebird 2.5-5.0), Python codec, explicit high-half table, or None
+# (no table: bytes pass through).
 CHARSETS = [
     (0, 'NONE', 1, None), (1, 'OCTETS', 1, None), (2, 'ASCII', 1, None),
     (3, 'UNICODE_FSS', 3, None), (4, 'UTF8', 4, None),
@@ -15,7 +29,7 @@ CHARSETS = [
     (9, 'DOS737', 1, 'cp737'), (10, 'DOS437', 1, 'cp437'), (11, 'DOS850', 1, 'cp850'),
     (12, 'DOS865', 1, 'cp865'), (13, 'DOS860', 1, 'cp860'), (14, 'DOS863', 1, 'cp863'),
     (15, 'DOS775', 1, 'cp775'), (16, 'DOS858', 1, 'cp858'), (17, 'DOS862', 1, 'cp862'),
-    (18, 'DOS864', 1, 'cp864'), (19, 'NEXT', 1, None),
+    (18, 'DOS864', 1, 'cp864'), (19, 'NEXT', 1, NEXT),
     (21, 'ISO8859_1', 1, 'iso8859_1'), (22, 'ISO8859_2', 1, 'iso8859_2'),
     (23, 'ISO8859_3', 1, 'iso8859_3'), (34, 'ISO8859_4', 1, 'iso8859_4'),
     (35, 'ISO8859_5', 1, 'iso8859_5'), (36, 'ISO8859_6', 1, 'iso8859_6'),
@@ -23,7 +37,7 @@ CHARSETS = [
     (39, 'ISO8859_9', 1, 'iso8859_9'), (40, 'ISO8859_13', 1, 'iso8859_13'),
     (44, 'KSC_5601', 2, None), (45, 'DOS852', 1, 'cp852'), (46, 'DOS857', 1, 'cp857'),
     (47, 'DOS861', 1, 'cp861'), (48, 'DOS866', 1, 'cp866'), (49, 'DOS869', 1, 'cp869'),
-    (50, 'CYRL', 1, None), (51, 'WIN1250', 1, 'cp1250'), (52, 'WIN1251', 1, 'cp1251'),
+    (50, 'CYRL', 1, 'cp1251'), (51, 'WIN1250', 1, 'cp1250'), (52, 'WIN1251', 1, 'cp1251'),
     (53, 'WIN1252', 1, 'cp1252'), (54, 'WIN1253', 1, 'cp1253'), (55, 'WIN1254', 1, 'cp1254'),
     (56, 'BIG_5', 2, None), (57, 'GB_2312', 2, None), (58, 'WIN1255', 1, 'cp1255'),
     (59, 'WIN1256', 1, 'cp1256'), (60, 'WIN1257', 1, 'cp1257'), (63, 'KOI8R', 1, 'koi8_r'),
@@ -51,7 +65,7 @@ for cid, name, bpc, codec in CHARSETS:
         print(f'\t{cid}: {{name: "{name}", bytesPerChar: {bpc}}},')
         continue
     print(f'\t{cid}: {{name: "{name}", bytesPerChar: {bpc}, high: &[128]rune{{')
-    vals = high_half(codec)
+    vals = high_half(codec) if isinstance(codec, str) else codec
     for i in range(0, 128, 8):
         print('\t\t' + ', '.join(f'0x{v:04X}' for v in vals[i:i+8]) + ',')
     print('\t}},')
