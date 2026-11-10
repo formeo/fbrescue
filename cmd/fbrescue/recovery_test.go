@@ -127,7 +127,7 @@ func TestRecovery(t *testing.T) {
 	}
 
 	var md strings.Builder
-	fmt.Fprintf(&md, "| Damage | Copies | Rows recovered | With --ddl | Changed, reported | Changed silently | Extra rows | Export failed |\n|---|--:|--:|--:|--:|--:|--:|--:|--:|\n")
+	fmt.Fprintf(&md, "| Damage | Copies | Rows recovered | With --ddl | Changed, reported | Changed silently | Extra rows | Export failed |\n|---|--:|--:|--:|--:|--:|--:|--:|\n")
 	for _, k := range damage.Kinds {
 		tl := results[k.Name]
 		if tl.trials == 0 {
