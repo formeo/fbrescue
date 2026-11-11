@@ -4,6 +4,7 @@
 package corpus
 
 import (
+	"encoding/binary"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -124,4 +125,32 @@ func (d DB) Gstat(key string) string {
 		}
 	}
 	return ""
+}
+
+// FuzzPages returns up to n initial pages from every configured corpus
+// database. It returns nil when the corpus is not configured, so fuzz targets
+// can always rely on their synthetic seeds.
+func FuzzPages(f *testing.F, n int) [][]byte {
+	f.Helper()
+	if os.Getenv(EnvVar) == "" {
+		return nil
+	}
+	var pages [][]byte
+	for _, db := range List(f) {
+		b, err := os.ReadFile(db.Path)
+		if err != nil {
+			f.Fatal(err)
+		}
+		if len(b) < 0x12 {
+			f.Fatalf("%s: file is too short to contain a header", db.Path)
+		}
+		ps := int(binary.LittleEndian.Uint16(b[0x10:]))
+		if ps == 0 {
+			f.Fatalf("%s: zero page size", db.Path)
+		}
+		for off, count := 0, 0; off+ps <= len(b) && count < n; off, count = off+ps, count+1 {
+			pages = append(pages, b[off:off+ps])
+		}
+	}
+	return pages
 }
