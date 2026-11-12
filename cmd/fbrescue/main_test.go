@@ -108,7 +108,7 @@ func TestExitCodesAndJSON(t *testing.T) {
 		t.Errorf("damaged scan: exit %d, want 2", code)
 	}
 	if code := run([]string{"info", filepath.Join(t.TempDir(), "missing.fdb")}, &out, &errOut); code != 1 {
-		t.Errorf("missing file: exit %d", code)
+		t.Errorf("missing file: exit %d, want 1", code)
 	}
 }
 

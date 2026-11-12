@@ -217,6 +217,7 @@ func damageInputs(t *testing.T) []corpus.DB {
 }
 
 func copyDB(t *testing.T, src string) (string, int) {
+	t.Helper()
 	b, err := os.ReadFile(src)
 	if err != nil {
 		t.Fatal(err)
@@ -235,6 +236,7 @@ func findPage(t *testing.T, path string, ps int, typ byte, rel int) uint32 {
 }
 
 func findPageAfter(t *testing.T, path string, ps int, typ byte, rel int, after uint32) uint32 {
+	t.Helper()
 	b, _ := os.ReadFile(path)
 	for p := after + 1; int(p+1)*ps <= len(b); p++ {
 		if pageMatches(b[int(p)*ps:], typ, rel) {
@@ -246,6 +248,7 @@ func findPageAfter(t *testing.T, path string, ps int, typ byte, rel int, after u
 }
 
 func findLastPage(t *testing.T, path string, ps int, typ byte, rel int) uint32 {
+	t.Helper()
 	b, _ := os.ReadFile(path)
 	for p := len(b)/ps - 1; p > 0; p-- {
 		if pageMatches(b[p*ps:], typ, rel) {
@@ -272,11 +275,13 @@ func pageMatches(page []byte, typ byte, rel int) bool {
 }
 
 func readAt(t *testing.T, path string, off int64, n int) []byte {
+	t.Helper()
 	b, _ := os.ReadFile(path)
 	return b[off : off+int64(n)]
 }
 
 func writeAt(t *testing.T, path string, off int64, data []byte) {
+	t.Helper()
 	f, err := os.OpenFile(path, os.O_WRONLY, 0)
 	if err != nil {
 		t.Fatal(err)
@@ -288,6 +293,7 @@ func writeAt(t *testing.T, path string, off int64, data []byte) {
 }
 
 func wantProblem(t *testing.T, r *Report, page uint32, kind string) {
+	t.Helper()
 	for _, p := range r.Problems {
 		if p.Page == page && p.Kind == kind {
 			return
@@ -297,6 +303,7 @@ func wantProblem(t *testing.T, r *Report, page uint32, kind string) {
 }
 
 func wantKind(t *testing.T, r *Report, kind string) {
+	t.Helper()
 	for _, p := range r.Problems {
 		if p.Kind == kind {
 			return
