@@ -9,7 +9,7 @@ Open-source Firebird recovery tool: read-only data recovery for Firebird 2.5–5
 
 `fbrescue` reads `.fdb` / `.gdb` files directly, without the Firebird engine, and gets data out of databases that `gbak` cannot back up. **It never modifies the source file.**
 
-> **Status: v0.5.** `info` and `scan` analyze a database; `tables` and `export` get the schema and the data out without the engine — from intact databases, and from damaged ones as far as the pages allow ([recovery rate](#recovery-rate)); `page` shows a single page; `report` makes a diagnostic report without data. Not exported yet: arrays and records with 48-bit transaction numbers — reported, never silently dropped. On a damaged database, work on a copy and try `gfix` and `gbak` first: they are the engine's own tools.
+> **Status: v0.5.** `info` and `scan` analyze a database; `tables` and `export` get the schema and the data out without the engine — from intact databases, and from damaged ones as far as the pages allow ([recovery rate](#recovery-rate)); `page` shows a single page; `report` makes a diagnostic report without data. Not exported yet: arrays — reported, never silently dropped. On a damaged database, work on a copy and try `gfix` and `gbak` first: they are the engine's own tools.
 
 ## When to use it
 
