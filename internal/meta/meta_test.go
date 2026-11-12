@@ -91,6 +91,18 @@ func TestCatalogMatchesGstat(t *testing.T) {
 	}
 }
 
+func TestCurrentLongTx(t *testing.T) {
+	const tx = uint64(1)<<32 + 50
+	c := &Catalog{db: &fdb.File{Header: &fdb.Header{OIT: tx + 1}}}
+	row, ok, err := c.Current(Version{Header: record.Header{Tx: tx, Flags: record.FlagLongTx}}, []byte("row"))
+	if err != nil || !ok || string(row.Data) != "row" {
+		t.Fatalf("Current: row %+v, ok %v, err %v", row, ok, err)
+	}
+	if state, err := c.TxState(tx); err != nil || state != TxCommitted {
+		t.Errorf("TxState: state %d, err %v; want committed", state, err)
+	}
+}
+
 // TestRolledBackVersions: the layout database keeps the record versions
 // of a rolled-back transaction (see tools/mkcorpus/sql/layout.sql).
 func TestRolledBackVersions(t *testing.T) {
