@@ -100,7 +100,7 @@ func exportedTables(t *testing.T, path string) []exportedTable {
 // for value, in the engine's own formatting.
 func TestExportRoundTrip(t *testing.T) {
 	roundTrip := map[string]bool{"base": true, "deleted": true, "readonly": true, "types": true, "layout": true, "manytx": true,
-		"versions": true, "blobs": true, "fb4types": true, "shop": true}
+		"versions": true, "blobs": true, "fb4types": true, "shop": true, "longtx": true}
 	for _, db := range corpus.List(t) {
 		if !roundTrip[db.Name] {
 			continue
@@ -390,10 +390,10 @@ func TestExportBlobContents(t *testing.T) {
 			dir := t.TempDir()
 			var out, errOut bytes.Buffer
 			if code := run([]string{"export", "--out", filepath.Join(dir, "csv"), db.Path}, &out, &errOut); code != 0 {
-				t.Fatalf("csv: exit %d: %s%s", code, out.String(), errOut.String())
+				t.Fatalf("csv: exit %d: %s", code, errOut.String())
 			}
 			if code := run([]string{"export", "--format", "sql", "--out", filepath.Join(dir, "sql"), db.Path}, &out, &errOut); code != 0 {
-				t.Fatalf("sql: exit %d: %s%s", code, out.String(), errOut.String())
+				t.Fatalf("sql: exit %d: %s", code, errOut.String())
 			}
 			raw, _ := os.ReadFile(filepath.Join(dir, "csv", "BL.csv"))
 			recs, err := csv.NewReader(bytes.NewReader(raw)).ReadAll()
@@ -487,7 +487,7 @@ func TestIncludeDeleted(t *testing.T) {
 			dir := t.TempDir()
 			var out, errOut bytes.Buffer
 			if code := run([]string{"export", "--include-deleted", "--table", "T2", "--out", dir, db.Path}, &out, &errOut); code != 0 {
-				t.Fatalf("exit %d: %s%s", code, out.String(), errOut.String())
+				t.Fatalf("exit %d: %s", code, errOut.String())
 			}
 			live, _ := os.ReadFile(filepath.Join(dir, "T2.csv"))
 			gone, _ := os.ReadFile(filepath.Join(dir, "T2.deleted.csv"))
@@ -586,7 +586,7 @@ func TestAllVersions(t *testing.T) {
 			dir := t.TempDir()
 			var out, errOut bytes.Buffer
 			if code := run([]string{"export", "--versions", "all", "--out", dir, db.Path}, &out, &errOut); code != 0 {
-				t.Fatalf("exit %d: %s%s", code, out.String(), errOut.String())
+				t.Fatalf("exit %d: %s", code, errOut.String())
 			}
 			b, _ := os.ReadFile(filepath.Join(dir, "VERS.versions.csv"))
 			recs, err := csv.NewReader(bytes.NewReader(b)).ReadAll()
