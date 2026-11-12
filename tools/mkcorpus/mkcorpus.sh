@@ -165,8 +165,11 @@ for v in 25 30 40 50; do
   for db in "$d"/*.fdb; do
     # gstat -r attaches to the database, which bumps the transaction and
     # attachment counters, so the header is read last. -r is not available
-    # for databases in full shutdown.
-    fb "$v" gstat -d -r -s "$db" > "${db%.fdb}.gstat-r.txt" 2>/dev/null || rm "${db%.fdb}.gstat-r.txt"
+    # for databases in full shutdown. longtx is a synthetic parser fixture
+    # whose TIP does not cover its patched header, so only its header is read.
+    if [[ $db != "$d/longtx.fdb" ]]; then
+      fb "$v" gstat -d -r -s "$db" > "${db%.fdb}.gstat-r.txt" 2>/dev/null || rm "${db%.fdb}.gstat-r.txt"
+    fi
     fb "$v" gstat -h "$db" > "${db%.fdb}.gstat.txt"
   done
   echo "fb$v: $(ls "$d"/*.fdb | wc -l) databases" >&2
