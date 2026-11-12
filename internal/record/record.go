@@ -205,7 +205,7 @@ func (r *Reader) Read(n uint32, line int) (Header, []byte, error) {
 			return h, nil, fmt.Errorf("page %d line %d: fragment page %d is not a data page", n, line, fp)
 		}
 		if err := r.db.CheckNumber(fp, r.frag); err != nil {
-			return h, nil, fmt.Errorf("page %d line %d: fragment: %w", n, line, fp, err)
+			return h, nil, fmt.Errorf("page %d line %d: fragment: %w", n, line, err)
 		}
 		cur, err = slot(r.frag, fl)
 		if err == nil && cur == nil {
