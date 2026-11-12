@@ -85,6 +85,12 @@ for v in 25 30 40 50; do
     40|50) cp "$d/base.fdb" "$d/hiwords.fdb"; patch "$d/hiwords.fdb" 0x74 050000000100020003000400 ;;
   esac
 
+  # Real ODS 13 pages rewritten to the 48-bit record-header format. Every
+  # transaction is older than OIT and therefore committed; see docs/format.md.
+  if [[ $v == 40 || $v == 50 ]]; then
+    go run "$(dirname "$0")/longtx.go" "$d/base.fdb" "$d/longtx.fdb"
+  fi
+
   # Over 16 304 transactions on 4K pages: three TIP pages.
   create_db "$v" "$d/manytx.fdb" 3 4096
   fb "$v" isql -q "$d/manytx.fdb" -i <(echo "create table c (i integer); commit;"
