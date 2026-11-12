@@ -52,7 +52,7 @@ jobs:
         with:
           path: ~/.cache/fbrescue/firebird
           key: firebird-${{ hashFiles('tools/mkcorpus/mkcorpus.sh') }}
-      - run: tools/mkcorpus/mkcorpus.sh corpus
+      - run: bash tools/mkcorpus/mkcorpus.sh corpus
       - run: go test -v ./...
         env:
           FBRESCUE_CORPUS: ${{ github.workspace }}/corpus
