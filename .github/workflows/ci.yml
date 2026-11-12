@@ -56,3 +56,10 @@ jobs:
       - run: go test -v ./...
         env:
           FBRESCUE_CORPUS: ${{ github.workspace }}/corpus
+      - name: Fuzz parsers
+        run: |
+          for pkg in ./internal/fdb ./internal/record ./internal/scan; do
+            go test "$pkg" -run='^$' -fuzz=. -fuzztime=60s
+          done
+        env:
+          FBRESCUE_CORPUS: ${{ github.workspace }}/corpus
