@@ -128,6 +128,11 @@ func TestExportRoundTrip(t *testing.T) {
 			fbTool(t, db.Engine, "create database '"+newDB+"' default character set utf8; quit;", "isql", "-q")
 			fbTool(t, db.Engine, "", "isql", "-q", "-b", "-ch", "UTF8", "-i", filepath.Join(out, "schema.sql"), newDB)
 			orig := copyTo(t, db.Path, dir) // SELECT may garbage-collect: never on the corpus file
+			if db.Name == "longtx" {
+				// The engine reads the unpatched source: longtx is a synthetic
+				// parser fixture whose TIP does not cover its patched header.
+				orig = copyTo(t, filepath.Join(filepath.Dir(db.Path), "base.fdb"), dir)
+			}
 
 			tables := exportedTables(t, db.Path)
 			if len(tables) == 0 {
@@ -390,10 +395,10 @@ func TestExportBlobContents(t *testing.T) {
 			dir := t.TempDir()
 			var out, errOut bytes.Buffer
 			if code := run([]string{"export", "--out", filepath.Join(dir, "csv"), db.Path}, &out, &errOut); code != 0 {
-				t.Fatalf("csv: exit %d: %s", code, errOut.String())
+				t.Fatalf("csv: exit %d: %s%s", code, out.String(), errOut.String())
 			}
 			if code := run([]string{"export", "--format", "sql", "--out", filepath.Join(dir, "sql"), db.Path}, &out, &errOut); code != 0 {
-				t.Fatalf("sql: exit %d: %s", code, errOut.String())
+				t.Fatalf("sql: exit %d: %s%s", code, out.String(), errOut.String())
 			}
 			raw, _ := os.ReadFile(filepath.Join(dir, "csv", "BL.csv"))
 			recs, err := csv.NewReader(bytes.NewReader(raw)).ReadAll()
@@ -487,7 +492,7 @@ func TestIncludeDeleted(t *testing.T) {
 			dir := t.TempDir()
 			var out, errOut bytes.Buffer
 			if code := run([]string{"export", "--include-deleted", "--table", "T2", "--out", dir, db.Path}, &out, &errOut); code != 0 {
-				t.Fatalf("exit %d: %s", code, errOut.String())
+				t.Fatalf("exit %d: %s%s", code, out.String(), errOut.String())
 			}
 			live, _ := os.ReadFile(filepath.Join(dir, "T2.csv"))
 			gone, _ := os.ReadFile(filepath.Join(dir, "T2.deleted.csv"))
@@ -586,7 +591,7 @@ func TestAllVersions(t *testing.T) {
 			dir := t.TempDir()
 			var out, errOut bytes.Buffer
 			if code := run([]string{"export", "--versions", "all", "--out", dir, db.Path}, &out, &errOut); code != 0 {
-				t.Fatalf("exit %d: %s", code, errOut.String())
+				t.Fatalf("exit %d: %s%s", code, out.String(), errOut.String())
 			}
 			b, _ := os.ReadFile(filepath.Join(dir, "VERS.versions.csv"))
 			recs, err := csv.NewReader(bytes.NewReader(b)).ReadAll()
