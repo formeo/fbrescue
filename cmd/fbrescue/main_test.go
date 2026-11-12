@@ -108,13 +108,56 @@ func TestExitCodesAndJSON(t *testing.T) {
 		t.Errorf("damaged scan: exit %d, want 2", code)
 	}
 	if code := run([]string{"info", filepath.Join(t.TempDir(), "missing.fdb")}, &out, &errOut); code != 1 {
-		t.Errorf("missing file: exit %d, want 1", code)
+		t.Errorf("missing file: exit %d", code)
 	}
 }
 
 func fileExists(p string) bool {
 	_, err := os.Stat(p)
 	return err == nil
+}
+
+func TestLongTxPage(t *testing.T) {
+	for _, db := range corpus.List(t) {
+		if db.Name != "longtx" {
+			continue
+		}
+		t.Run(db.Engine, func(t *testing.T) {
+			st, _ := os.Stat(db.Path)
+			found, decoded := 0, 0
+			for n := 0; n < int(st.Size()/1024); n++ {
+				var out, errOut bytes.Buffer
+				if run([]string{"page", "--json", db.Path, strconv.Itoa(n)}, &out, &errOut) != 0 {
+					t.Fatalf("page %d: %s", n, errOut.String())
+				}
+				var p pageJSON
+				if err := json.Unmarshal(out.Bytes(), &p); err != nil {
+					t.Fatal(err)
+				}
+				if p.Fields["table"] != "T" || p.TypeName != "data" {
+					continue
+				}
+				for _, r := range p.Records {
+					if r.Tx < uint64(1)<<32 {
+						continue
+					}
+					found++
+					if r.TxState != "committed" {
+						t.Errorf("transaction %d state = %q, want committed", r.Tx, r.TxState)
+					}
+					if len(r.Values) > 0 {
+						decoded++
+					}
+				}
+				if found > 0 && decoded > 0 {
+					break
+				}
+			}
+			if found == 0 || decoded == 0 {
+				t.Errorf("48-bit records found %d, with decoded values %d", found, decoded)
+			}
+		})
+	}
 }
 
 // TestPage finds the data page of VERS in the versions database and checks
