@@ -38,16 +38,21 @@ install_fb() {
   local tmp; tmp=$(mktemp -d)
   echo "downloading ${URL[$v]##*/}" >&2
   curl -fsSL --connect-timeout 30 --max-time 300 \
-    --retry 2 --retry-delay 5 --retry-all-errors \
+    --retry 2 --retry-delay 5 --retry-max-time 600 --retry-all-errors \
     -o "$tmp/firebird.tar.gz" "${URL[$v]}"
+  echo "extracting Firebird $v" >&2
   tar xzf "$tmp/firebird.tar.gz" -C "$tmp"
   mkdir -p "$dir"
   tar xzf "$tmp"/*/buildroot.tar.gz -C "$dir"
   rm -rf "$tmp"
+  echo "installed Firebird $v" >&2
 }
 
 # fb <version> <tool> [args...] runs a Firebird tool in embedded mode.
-fb() { FB_CACHE=$CACHE "$(dirname "$0")/fb.sh" "$@"; }
+fb() {
+  printf 'fb%s: %s\n' "$1" "$2" >&2
+  FB_CACHE=$CACHE timeout 300s "$(dirname "$0")/fb.sh" "$@"
+}
 
 create_db() { # create_db <version> <path> <dialect> [page size] [extra clause]
   echo "create database '$2' page_size ${4:-8192} ${5:-}; quit;" | fb "$1" isql -q -sql_dialect "$3"
@@ -91,7 +96,8 @@ for v in 25 30 40 50; do
   # Real ODS 13 pages rewritten to the 48-bit record-header format. Every
   # transaction is older than OIT and therefore committed; see docs/format.md.
   if [[ $v == 40 || $v == 50 ]]; then
-    go run "$(dirname "$0")/longtx.go" "$d/base.fdb" "$d/longtx.fdb"
+    echo "fb$v: generating longtx.fdb" >&2
+    timeout 60s go run "$(dirname "$0")/longtx.go" "$d/base.fdb" "$d/longtx.fdb"
   fi
 
   # Over 16 304 transactions on 4K pages: three TIP pages.
@@ -132,7 +138,7 @@ for v in 25 30 40 50; do
   # Housekeeping off, and nothing may read the table through the engine.
   create_db "$v" "$d/versions.fdb" 3 4096 "default character set utf8"
   fb "$v" gfix -housekeeping 0 "$d/versions.fdb"
-  fb "$v" isql -q "$d/versions.fdb" -i "$SQL/versions.sql"
+  fb "$v" isql -q -ch UTF8 "$d/versions.fdb" -i "$SQL/versions.sql"
 
   # Blobs of every level (a level-2 one of 8 MB), text and binary, and on
   # Firebird 5 stream blobs.
