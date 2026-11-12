@@ -108,12 +108,22 @@ this way, as the engine does.
 0x10 sequence u32, 0x14 relation u16, 0x16 slot count u16, 0x18 slots of
 (offset u16, length u16). Page flag 0x01 (byte 1): the page holds only
 fragments of records larger than a page and is deliberately not listed in
-a pointer page. Record header: transaction u32, back page u32, back line
+a pointer page. Record header: transaction low u32, back page u32, back line
 u16, flags u16 (offset 10), format u8 — 13 bytes. Flags: 0x01 deleted,
 0x02 back version, 0x04 fragment, 0x08 more fragments follow, 0x10 blob,
 0x20 the back version of this record is stored as differences, 0x40
-large, 0x80 damaged, 0x400 48-bit transaction number (not read yet:
-reported as unsupported), 0x800 not packed (ODS 13.1).
+large, 0x80 damaged, 0x400 48-bit transaction number, 0x800 not packed
+(ODS 13.1). With 0x400, byte 13 is padding, transaction high u16 is at 14,
+and record data starts at 16; the number is low | high<<32. Test:
+`TestReadLongTx` (including a fragmented record).
+
+The `longtx` corpus databases (Firebird 4/5) are `base.fdb` copies rewritten
+by `tools/mkcorpus/longtx.go`. Every non-blob record gets high word 1.
+Ordinary and last-fragment records grow by three bytes; incomplete fragments
+use the existing padding and keep their 22-byte header. Next/OIT/OAT/OST get
+high word 1, and OIT/OAT/OST low words become next low + 1, making every
+rewritten transaction committed and older than OIT without a huge TIP.
+Tests: `TestCatalogMatchesGstat`, `TestExportRoundTrip`, `TestLongTxPage`.
 
 Counting as gstat does — records: neither back version, fragment nor blob
 (deleted included); versions: back versions — matches gstat for every
@@ -133,9 +143,10 @@ length, then the byte, and stores records that do not compress as they are
 (flag 0x800).
 
 A record that does not fit in a page is split. The first piece has flag
-0x08 and a 22-byte header: the 13-byte header, three bytes of padding that
-may hold garbage, next fragment page u32 at 16, line u16 at 20. Middle
-pieces have 0x04|0x08 and the same header, the last one 0x04 and 13 bytes.
+0x08 and a 22-byte header: the base header, padding and the optional high
+transaction word at 13-15, next fragment page u32 at 16, line u16 at 20.
+Middle pieces have 0x04|0x08 and the same header, the last one 0x04 and the
+ordinary 13-byte or long-transaction 16-byte header.
 Up to ODS 13.0 the record is packed first and the packed bytes are split;
 ODS 13.1 packs each piece on its own, and each piece has its own 0x800.
 Test: `TestCatalogMatchesGstat` reads every record of every corpus
