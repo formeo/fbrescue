@@ -138,8 +138,11 @@ const (
 )
 
 // TxState returns the state of a transaction from the transaction inventory.
-func (c *Catalog) TxState(tx uint32) (int, error) {
-	per := uint32(c.db.PageSize-0x14) * 4
+func (c *Catalog) TxState(tx uint64) (int, error) {
+	if tx > 0 && tx < c.db.Header.OIT {
+		return TxCommitted, nil
+	}
+	per := uint64(c.db.PageSize-0x14) * 4
 	i := tx / per
 	if int(i) >= len(c.tips) {
 		return 0, fmt.Errorf("transaction %d is beyond the transaction inventory", tx)
@@ -161,7 +164,7 @@ func (c *Catalog) TxState(tx uint32) (int, error) {
 
 // Committed reports whether a transaction committed. Transaction 0 is the
 // system transaction that creates the database.
-func (c *Catalog) Committed(tx uint32) (bool, error) {
+func (c *Catalog) Committed(tx uint64) (bool, error) {
 	if tx == 0 {
 		return true, nil
 	}
