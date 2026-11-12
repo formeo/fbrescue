@@ -37,7 +37,10 @@ install_fb() {
   [[ -x $dir/opt/firebird/bin/isql ]] && return
   local tmp; tmp=$(mktemp -d)
   echo "downloading ${URL[$v]##*/}" >&2
-  curl -fsSL "${URL[$v]}" | tar xz -C "$tmp"
+  curl -fsSL --connect-timeout 30 --max-time 300 \
+    --retry 2 --retry-delay 5 --retry-all-errors \
+    -o "$tmp/firebird.tar.gz" "${URL[$v]}"
+  tar xzf "$tmp/firebird.tar.gz" -C "$tmp"
   mkdir -p "$dir"
   tar xzf "$tmp"/*/buildroot.tar.gz -C "$dir"
   rm -rf "$tmp"
@@ -129,11 +132,11 @@ for v in 25 30 40 50; do
   # Housekeeping off, and nothing may read the table through the engine.
   create_db "$v" "$d/versions.fdb" 3 4096 "default character set utf8"
   fb "$v" gfix -housekeeping 0 "$d/versions.fdb"
-  fb "$v" isql -q -ch UTF8 "$d/versions.fdb" -i "$SQL/versions.sql"
+  fb "$v" isql -q "$d/versions.fdb" -i "$SQL/versions.sql"
 
   # Blobs of every level (a level-2 one of 8 MB), text and binary, and on
   # Firebird 5 stream blobs.
-  create_db "$v" "$d/blobs.fdb" 3 4096 "default character set utf8"
+  create_db "$v" "$d/blobs.fdb" 3 4096
   fb "$v" isql -q -ch UTF8 "$d/blobs.fdb" -i "$SQL/blobs.sql"
   [[ $v != 50 ]] || fb "$v" isql -q -ch UTF8 "$d/blobs.fdb" -i "$SQL/blobs5.sql"
 
@@ -144,7 +147,7 @@ for v in 25 30 40 50; do
   fi
 
   # A small shop with indexes and blobs: the input of the damage tests.
-  create_db "$v" "$d/shop.fdb" 3 4096 "default character set utf8"
+  create_db "$v" "$d/shop.fdb" 3 4096
   fb "$v" isql -q -ch UTF8 "$d/shop.fdb" -i "$SQL/shop.sql"
 
   # nbackup lock with a committed row that lives only in nblock.fdb.delta.
