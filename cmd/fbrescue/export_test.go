@@ -100,7 +100,7 @@ func exportedTables(t *testing.T, path string) []exportedTable {
 // for value, in the engine's own formatting.
 func TestExportRoundTrip(t *testing.T) {
 	roundTrip := map[string]bool{"base": true, "deleted": true, "readonly": true, "types": true, "layout": true, "manytx": true,
-		"versions": true, "blobs": true, "fb4types": true, "shop": true}
+		"versions": true, "blobs": true, "fb4types": true, "shop": true, "longtx": true}
 	for _, db := range corpus.List(t) {
 		if !roundTrip[db.Name] {
 			continue
@@ -128,6 +128,11 @@ func TestExportRoundTrip(t *testing.T) {
 			fbTool(t, db.Engine, "create database '"+newDB+"' default character set utf8; quit;", "isql", "-q")
 			fbTool(t, db.Engine, "", "isql", "-q", "-b", "-ch", "UTF8", "-i", filepath.Join(out, "schema.sql"), newDB)
 			orig := copyTo(t, db.Path, dir) // SELECT may garbage-collect: never on the corpus file
+			if db.Name == "longtx" {
+				// The engine reads the unpatched source: longtx is a synthetic
+				// parser fixture whose TIP does not cover its patched header.
+				orig = copyTo(t, filepath.Join(filepath.Dir(db.Path), "base.fdb"), dir)
+			}
 
 			tables := exportedTables(t, db.Path)
 			if len(tables) == 0 {

@@ -28,13 +28,14 @@ const (
 
 const (
 	headerSize         = 13 // transaction 4, back page 4, back line 2, flags 2, format 1
-	fragmentHeaderSize = 22 // header, padding, next fragment page 4 at 16, line 2 at 20
+	longTxHeaderSize   = 16 // header, padding at 13, transaction high 16 bits at 14
+	fragmentHeaderSize = 22 // header, padding or high bits, next fragment page 4 at 16, line 2 at 20
 	dataPageHeader     = 0x18
 )
 
 // Header is the fixed part of a record version.
 type Header struct {
-	Tx       uint32
+	Tx       uint64
 	BackPage uint32
 	BackLine uint16
 	Flags    uint16
@@ -135,17 +136,34 @@ func slot(b []byte, i int) ([]byte, error) {
 	if off < dataPageHeader+4*count || off+n > len(b) || n < headerSize {
 		return nil, fmt.Errorf("line %d points outside the page (offset %d, length %d)", i, off, n)
 	}
+	if n < headerLen(le.Uint16(b[off+10:])) {
+		return nil, fmt.Errorf("line %d has a truncated record header", i)
+	}
 	return b[off : off+n], nil
 }
 
+func headerLen(flags uint16) int {
+	if flags&FlagIncomplete != 0 {
+		return fragmentHeaderSize
+	}
+	if flags&FlagLongTx != 0 {
+		return longTxHeaderSize
+	}
+	return headerSize
+}
+
 func parseHeader(b []byte) Header {
-	return Header{
-		Tx:       le.Uint32(b[0:]),
+	h := Header{
+		Tx:       uint64(le.Uint32(b[0:])),
 		BackPage: le.Uint32(b[4:]),
 		BackLine: le.Uint16(b[8:]),
 		Flags:    le.Uint16(b[10:]),
 		Format:   b[12],
 	}
+	if h.Flags&FlagLongTx != 0 {
+		h.Tx |= uint64(le.Uint16(b[14:])) << 32
+	}
+	return h
 }
 
 // Read returns the header and the unpacked data of the record at page n,
@@ -208,7 +226,7 @@ func (r *Reader) Read(n uint32, line int) (Header, []byte, error) {
 		} else if flags&FlagIncomplete != 0 {
 			data = append(data, cur[fragmentHeaderSize:]...)
 		} else {
-			data = append(data, cur[headerSize:]...)
+			data = append(data, cur[headerLen(flags):]...)
 		}
 	}
 	if !r.packed131 && h.Flags&FlagIncomplete != 0 {
@@ -221,7 +239,7 @@ func (r *Reader) Read(n uint32, line int) (Header, []byte, error) {
 
 // unpackFragment appends the unpacked data of one stored record piece.
 func (r *Reader) unpackFragment(b []byte, flags uint16, dst []byte) ([]byte, error) {
-	body := b[headerSize:]
+	body := b[headerLen(flags):]
 	if flags&FlagIncomplete != 0 {
 		if len(b) < fragmentHeaderSize {
 			return nil, errors.New("fragment header is truncated")

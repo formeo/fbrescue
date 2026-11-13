@@ -28,7 +28,7 @@ func TestHealthyCorpusMatchesGstat(t *testing.T) {
 	for _, db := range corpus.List(t) {
 		t.Run(db.Engine+"/"+db.Name, func(t *testing.T) {
 			f, r := scanFile(t, db.Path)
-			if db.Name == "hiwords" {
+			if db.Name == "hiwords" || db.Name == "longtx" {
 				// The patched header claims ~2^32 transactions the TIP never saw.
 				if len(r.Problems) != 1 || r.Problems[0].Kind != TIPChain {
 					t.Errorf("problems = %+v, want one %s", r.Problems, TIPChain)

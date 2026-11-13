@@ -47,16 +47,13 @@ func (c *Catalog) BeforeDelete(stub Row) (Row, bool, error) {
 func (c *Catalog) committedFrom(r Row) (Row, bool, error) {
 	var older, limbo bool
 	for n := 0; ; n++ {
-		if r.Header.Flags&record.FlagLongTx != 0 {
-			return Row{}, false, errors.New("48-bit transaction number: not supported yet")
-		}
 		if r.Header.Tx != 0 {
 			s, err := c.TxState(r.Header.Tx)
 			if err != nil {
 				// Transactions older than the oldest interesting one all
 				// committed. For newer ones the newest version is the best
 				// guess: most transactions commit.
-				r.Older, r.Limbo, r.Unknown = older, limbo, uint64(r.Header.Tx) >= c.db.Header.OIT
+				r.Older, r.Limbo, r.Unknown = older, limbo, r.Header.Tx >= c.db.Header.OIT
 				return r, true, nil
 			}
 			if s == TxCommitted {

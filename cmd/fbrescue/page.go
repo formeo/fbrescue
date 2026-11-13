@@ -30,7 +30,7 @@ type recordJSON struct {
 	Line     int               `json:"line"`
 	Offset   int               `json:"offset"`
 	Length   int               `json:"length"`
-	Tx       uint32            `json:"transaction"`
+	Tx       uint64            `json:"transaction"`
 	TxState  string            `json:"transaction_state,omitempty"`
 	Flags    []string          `json:"flags"`
 	Back     string            `json:"back_version,omitempty"` // page:line

@@ -37,14 +37,22 @@ install_fb() {
   [[ -x $dir/opt/firebird/bin/isql ]] && return
   local tmp; tmp=$(mktemp -d)
   echo "downloading ${URL[$v]##*/}" >&2
-  curl -fsSL "${URL[$v]}" | tar xz -C "$tmp"
+  curl -fsSL --connect-timeout 30 --max-time 300 \
+    --retry 2 --retry-delay 5 --retry-max-time 600 --retry-all-errors \
+    -o "$tmp/firebird.tar.gz" "${URL[$v]}"
+  echo "extracting Firebird $v" >&2
+  tar xzf "$tmp/firebird.tar.gz" -C "$tmp"
   mkdir -p "$dir"
   tar xzf "$tmp"/*/buildroot.tar.gz -C "$dir"
   rm -rf "$tmp"
+  echo "installed Firebird $v" >&2
 }
 
 # fb <version> <tool> [args...] runs a Firebird tool in embedded mode.
-fb() { FB_CACHE=$CACHE "$(dirname "$0")/fb.sh" "$@"; }
+fb() {
+  printf 'fb%s: %s\n' "$1" "$2" >&2
+  FB_CACHE=$CACHE timeout 300s "$(dirname "$0")/fb.sh" "$@"
+}
 
 create_db() { # create_db <version> <path> <dialect> [page size] [extra clause]
   echo "create database '$2' page_size ${4:-8192} ${5:-}; quit;" | fb "$1" isql -q -sql_dialect "$3"
@@ -84,6 +92,13 @@ for v in 25 30 40 50; do
     30) cp "$d/base.fdb" "$d/hiwords.fdb"; patch "$d/hiwords.fdb" 0x78 050000000100020003000400 ;;
     40|50) cp "$d/base.fdb" "$d/hiwords.fdb"; patch "$d/hiwords.fdb" 0x74 050000000100020003000400 ;;
   esac
+
+  # Real ODS 13 pages rewritten to the 48-bit record-header format. Every
+  # transaction is older than OIT and therefore committed; see docs/format.md.
+  if [[ $v == 40 || $v == 50 ]]; then
+    echo "fb$v: generating longtx.fdb" >&2
+    timeout 60s go run "$(dirname "$0")/longtx.go" "$d/base.fdb" "$d/longtx.fdb"
+  fi
 
   # Over 16 304 transactions on 4K pages: three TIP pages.
   create_db "$v" "$d/manytx.fdb" 3 4096
@@ -150,8 +165,11 @@ for v in 25 30 40 50; do
   for db in "$d"/*.fdb; do
     # gstat -r attaches to the database, which bumps the transaction and
     # attachment counters, so the header is read last. -r is not available
-    # for databases in full shutdown.
-    fb "$v" gstat -d -r -s "$db" > "${db%.fdb}.gstat-r.txt" 2>/dev/null || rm "${db%.fdb}.gstat-r.txt"
+    # for databases in full shutdown. longtx is a synthetic parser fixture
+    # whose TIP does not cover its patched header, so only its header is read.
+    if [[ $db != "$d/longtx.fdb" ]]; then
+      fb "$v" gstat -d -r -s "$db" > "${db%.fdb}.gstat-r.txt" 2>/dev/null || rm "${db%.fdb}.gstat-r.txt"
+    fi
     fb "$v" gstat -h "$db" > "${db%.fdb}.gstat.txt"
   done
   echo "fb$v: $(ls "$d"/*.fdb | wc -l) databases" >&2
