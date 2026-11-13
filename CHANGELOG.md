@@ -3,6 +3,25 @@
 Each version's section is also its release notes on GitHub
 (`tools/release/notes.sh`).
 
+## v0.6.0 — 2026-11-13
+
+Firebird 4+ records with 48-bit transaction numbers, and the CYRL and NEXT
+character sets.
+
+- **48-bit transaction numbers.** Firebird 4+ databases that have seen more
+  than 2^32 transactions are now supported: records are exported with the
+  correct transaction state, and `page` decodes and prints the full
+  transaction number. Ordinary and fragmented records are covered by tests
+  against real ODS 13 pages with a documented 48-bit patch
+  ([#23](https://github.com/formeo/fbrescue/issues/23)).
+- **CYRL and NEXT.** Text stored in these legacy Firebird character sets is
+  now decoded correctly ([#22](https://github.com/formeo/fbrescue/issues/22)).
+- **Parser hardening.** The header/page, record and scanner parsers now have
+  fuzz tests with synthetic seeds and pages from the real Firebird corpus.
+  CI runs each target for 60 seconds
+  ([#19](https://github.com/formeo/fbrescue/issues/19)).
+- **Unchanged:** array columns are still reported as unsupported.
+
 ## v0.5.0 — 2026-10-27
 
 CSV for Excel, and the site in Portuguese.
