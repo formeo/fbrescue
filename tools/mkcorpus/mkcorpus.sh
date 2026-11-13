@@ -25,7 +25,7 @@ declare -A URL=(
 compat_libs() {
   mkdir -p "$CACHE/compat"
   local want have
-  for pair in libtommath.so.0:libtommath.so.1 libncurses.so.5:libtinfo.so.6; do
+  for pair in libtommath.so.0:libtommath.so.1 libncurses.so.5:libncurses.so.6 libtinfo.so.5:libtinfo.so.6; do
     want=${pair%%:*}; have=$(ldconfig -p | awk -v l="${pair##*:}" '$1 == l { print $NF; exit }')
     [[ -n $have ]] || { echo "missing system library ${pair##*:}" >&2; exit 1; }
     ln -sf "$have" "$CACHE/compat/$want"
@@ -137,13 +137,14 @@ for v in 25 30 40 50; do
   # Record version chains: committed and rolled-back updates and deletes.
   # Housekeeping off, and nothing may read the table through the engine.
   create_db "$v" "$d/versions.fdb" 3 4096 "default character set utf8"
+  fb "$v" gfix -housekeeping 0 "$d/versions.fdb"
   fb "$v" isql -q -ch UTF8 "$d/versions.fdb" -i "$SQL/versions.sql"
 
   # Blobs of every level (a level-2 one of 8 MB), text and binary, and on
   # Firebird 5 stream blobs.
   create_db "$v" "$d/blobs.fdb" 3 4096 "default character set utf8"
   fb "$v" isql -q -ch UTF8 "$d/blobs.fdb" -i "$SQL/blobs.sql"
-  [[ $v != 50 ]] || fb "$v" isql -q -ch UTF8 "$d/blobs5.sql"
+  [[ $v != 50 ]] || fb "$v" isql -q -ch UTF8 "$d/blobs.fdb" -i "$SQL/blobs5.sql"
 
   # Types added in Firebird 4.
   if [[ $v == 40 || $v == 50 ]]; then
