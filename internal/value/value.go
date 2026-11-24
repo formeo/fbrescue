@@ -67,7 +67,7 @@ func (f Field) Stored() bool { return f.DType != 0 && f.Offset != 0 }
 func (f Field) Supported() bool {
 	switch f.DType {
 	case TypeText, TypeVarying, TypeShort, TypeLong, TypeInt64, TypeReal, TypeDouble,
-		TypeDate, TypeTime, TypeTimestamp, TypeBoolean, TypeBlob,
+		TypeDate, TypeTime, TypeTimestamp, TypeBoolean, TypeBlob, TypeArray,
 		TypeInt128, TypeDec64, TypeDec128, TypeTimeTZ, TypeTimestampTZ:
 		return true
 	}
@@ -175,6 +175,8 @@ func DecodeBytes(b []byte, f Field, opt Options) (any, error) {
 		// For blobs the scale holds the character set of text.
 		return BlobRef{Relation: le.Uint16(b), Number: uint64(b[2])<<32 | uint64(le.Uint32(b[4:])),
 			SubType: f.SubType, Charset: int(uint8(f.Scale))}, nil
+	case TypeArray:
+		return ArrayRef{Relation: le.Uint16(b), Number: uint64(b[2])<<32 | uint64(le.Uint32(b[4:]))}, nil
 	case TypeText:
 		if f.Charset() == 1 {
 			return Octets(append([]byte(nil), b...)), nil
@@ -256,7 +258,7 @@ func Alignment(dtype uint8) uint32 {
 		return 2
 	case TypeLong, TypeReal, TypeDate, TypeTime, TypeTimeTZ, TypeTimestampTZ:
 		return 4
-	case TypeDouble, TypeTimestamp, TypeBlob, TypeInt64, TypeDec64, TypeDec128, TypeInt128:
+	case TypeDouble, TypeTimestamp, TypeBlob, TypeArray, TypeInt64, TypeDec64, TypeDec128, TypeInt128:
 		return 8
 	}
 	return 1
