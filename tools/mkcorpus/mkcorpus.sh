@@ -27,7 +27,7 @@ compat_libs() {
   mkdir -p "$CACHE/compat"
   local want have
   for pair in libtommath.so.0:libtommath.so.1 libncurses.so.5:libncurses.so.6 libtinfo.so.5:libtinfo.so.6; do
-    want=${pair%%:*}; have=$(ldconfig -p | awk -v l="${pair##*:}" '$1 == l { print $NF; exit }')
+    want=${pair%%:*}; have=$(ldconfig -p | awk -v l="${pair##*:}" '$1 == l { path = $NF } END { print path }')
     [[ -n $have ]] || { echo "missing system library ${pair##*:}" >&2; exit 1; }
     ln -sf "$have" "$CACHE/compat/$want"
   done
