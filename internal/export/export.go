@@ -78,8 +78,10 @@ func Exported(c *meta.Column) (bool, string) {
 	switch {
 	case c.Computed:
 		return false, "COMPUTED BY: the expression is not stored with the data"
+	case c.Field.DType == value.TypeArray && c.Array == nil:
+		return false, "array element type or dimensions are missing from RDB$FIELDS/RDB$FIELD_DIMENSIONS"
 	case !c.Field.Supported():
-		return false, fmt.Sprintf("%s (data type %d) values are not exported yet", c.Field.SQLType(), c.Field.DType)
+		return false, fmt.Sprintf("%s (data type %d) values are not exported yet", c.SQLType(), c.Field.DType)
 	}
 	return true, ""
 }
@@ -482,6 +484,12 @@ func resolve(cat *meta.Catalog, x any, opt value.Options) (any, error) {
 			return value.DecodeText(b, v.Charset, opt), nil
 		}
 		return value.Octets(b), nil
+	case value.ArrayRef:
+		b, err := cat.Blob(record.BlobID{Relation: v.Relation, Number: v.Number})
+		if err != nil {
+			return nil, err
+		}
+		return value.ParseArray(b, opt)
 	case value.TimeTZ:
 		_, err := v.Format()
 		return x, err
@@ -508,11 +516,11 @@ func WriteSchema(w io.Writer, tables []*meta.Table) error {
 			case c.Computed:
 				// The column keeps its place, so that its field id stays
 				// that of the stored records (this file also works as --ddl).
-				lines = append(lines, fmt.Sprintf("  %s COMPUTED BY (CAST(NULL AS %s)) -- the expression is not stored with the data", quote(c.Name), c.Field.SQLType()))
+				lines = append(lines, fmt.Sprintf("  %s COMPUTED BY (CAST(NULL AS %s)) -- the expression is not stored with the data", quote(c.Name), c.SQLType()))
 			case !ok:
-				lines = append(lines, fmt.Sprintf("  %s %s -- %s", quote(c.Name), c.Field.SQLType(), why))
+				lines = append(lines, fmt.Sprintf("  %s %s -- %s", quote(c.Name), c.SQLType(), why))
 			default:
-				l := fmt.Sprintf("  %s %s", quote(c.Name), c.Field.SQLType())
+				l := fmt.Sprintf("  %s %s", quote(c.Name), c.SQLType())
 				if c.NotNull {
 					l += " NOT NULL"
 				}

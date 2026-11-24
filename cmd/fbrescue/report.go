@@ -172,7 +172,7 @@ func dryExport(cat *meta.Catalog) (*reportExport, []reportTable, error) {
 		rt := reportTable{Name: fmt.Sprintf("T%d", t.ID), Formats: len(t.Formats), Columns: []string{},
 			Rows: tr.Rows, Skipped: tr.Skipped, Deleted: tr.Deleted}
 		for _, c := range t.Columns {
-			typ := c.Field.SQLType()
+			typ := c.SQLType()
 			if c.Computed {
 				typ = "COMPUTED BY"
 			}
