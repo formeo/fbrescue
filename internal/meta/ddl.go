@@ -124,7 +124,7 @@ func (c *Catalog) UseDDL(defs []*ddl.Table) {
 func (c *Catalog) addDDLTable(id uint16, d *ddl.Table, format uint16) {
 	t := &Table{ID: id, Name: d.Name, Formats: map[uint16]*Format{format: {Fields: d.Fields()}}, CurrentFormat: format, FromDDL: true}
 	for i, dc := range d.Columns {
-		t.Columns = append(t.Columns, &Column{Name: dc.Name, Position: i, NotNull: dc.NotNull, Field: dc.Field, Computed: dc.Computed})
+		t.Columns = append(t.Columns, &Column{Name: dc.Name, Position: i, NotNull: dc.NotNull, Field: dc.Field, Array: dc.Array, Computed: dc.Computed})
 	}
 	c.Tables = append(c.Tables, t)
 	c.warn("--ddl: table %s (relation %d) is read with the layout from the DDL, for records of format %d; check the values", d.Name, id, format)

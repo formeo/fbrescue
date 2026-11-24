@@ -58,14 +58,23 @@ type Column struct {
 	Name     string
 	Position int
 	NotNull  bool
-	Field    value.Field // physical type in the current format
-	Computed bool        // COMPUTED BY: no stored value
+	Field    value.Field      // physical type in the current format
+	Array    *value.ArrayType // element type and dimensions for TypeArray
+	Computed bool             // COMPUTED BY: no stored value
 
 	// Default is the value of this column in records written before it
 	// was added, if the engine reads one there (NOT NULL with a default).
 	HasDefault bool
 	Default    any
 	DefaultErr error // the default exists but could not be evaluated
+}
+
+// SQLType returns the column declaration, including array dimensions.
+func (c *Column) SQLType() string {
+	if c.Array != nil {
+		return c.Array.SQLType()
+	}
+	return c.Field.SQLType()
 }
 
 // Format is one version of a table's record layout.
@@ -325,6 +334,7 @@ type relation struct {
 
 type relField struct {
 	name     string
+	source   string
 	position int
 	id       int
 	notNull  bool
@@ -358,8 +368,9 @@ func (c *Catalog) loadTables(formats map[formatKey]*Format) error {
 		rel := textField(rec, ff["RELATION_NAME"])
 		d, hasD := blobField(rec, ff["DEFAULT_VALUE"])
 		fields[rel] = append(fields[rel], relField{
-			name: textField(rec, ff["FIELD_NAME"]), position: int(intField(rec, ff["FIELD_POSITION"])),
-			id: int(intField(rec, ff["FIELD_ID"])), notNull: intField(rec, ff["NULL_FLAG"]) == 1,
+			name: textField(rec, ff["FIELD_NAME"]), source: textField(rec, ff["FIELD_SOURCE"]),
+			position: int(intField(rec, ff["FIELD_POSITION"])),
+			id:       int(intField(rec, ff["FIELD_ID"])), notNull: intField(rec, ff["NULL_FLAG"]) == 1,
 			dflt: d, hasDflt: hasD,
 		})
 	})
@@ -369,6 +380,7 @@ func (c *Catalog) loadTables(formats map[formatKey]*Format) error {
 
 	rels = append(rels, c.lostRelations(rels, formats)...)
 	slices.SortFunc(rels, func(a, b relation) int { return cmp.Compare(a.id, b.id) })
+	arrayCols := map[string][]*Column{}
 	for _, r := range rels {
 		if !r.regular {
 			continue
@@ -394,13 +406,143 @@ func (c *Catalog) loadTables(formats map[formatKey]*Format) error {
 			}
 			col := &Column{Name: rf.name, Position: rf.position, NotNull: rf.notNull, Field: cur.Fields[rf.id]}
 			col.Computed = col.Field.DType != 0 && col.Field.Offset == 0
+			if col.Field.DType == value.TypeArray && rf.source != "" {
+				arrayCols[rf.source] = append(arrayCols[rf.source], col)
+			}
 			c.setDefault(col, cur, rf)
 			t.Columns = append(t.Columns, col)
 		}
 		c.lostColumns(t, cur)
 		c.Tables = append(c.Tables, t)
 	}
+	if len(arrayCols) > 0 {
+		c.loadArrayTypes(arrayCols)
+	}
 	return nil
+}
+
+// loadArrayTypes reads element descriptors and bounds for array columns.
+// They belong to the column's source field, not to its physical array id.
+func (c *Catalog) loadArrayTypes(cols map[string][]*Column) {
+	ff := systemFormat(relFields, c.db)
+	types := map[string]value.Field{}
+	_ = c.visible(relFields, func(v Version, rec []byte) {
+		name := textField(rec, ff["FIELD_NAME"])
+		if _, ok := cols[name]; !ok {
+			return
+		}
+		f, err := arrayElementField(rec, ff)
+		if err != nil {
+			c.warn("RDB$FIELDS: array field %s: %v", name, err)
+			return
+		}
+		types[name] = f
+	})
+	fd := systemFormat(relFieldDimensions, c.db)
+	dims := map[string][]value.ArrayDimension{}
+	seen := map[string][]bool{}
+	invalid := map[string]bool{}
+	_ = c.visible(relFieldDimensions, func(v Version, rec []byte) {
+		name := textField(rec, fd["FIELD_NAME"])
+		if _, ok := types[name]; !ok || invalid[name] {
+			return
+		}
+		n := int(intField(rec, fd["DIMENSION"]))
+		lower, upper := intField(rec, fd["LOWER_BOUND"]), intField(rec, fd["UPPER_BOUND"])
+		if n < 0 || n >= 16 || lower < -1<<31 || lower > 1<<31-1 || upper < -1<<31 || upper > 1<<31-1 || upper < lower {
+			c.warn("RDB$FIELD_DIMENSIONS: invalid dimension of array field %s", name)
+			invalid[name] = true
+			return
+		}
+		for len(dims[name]) <= n {
+			dims[name] = append(dims[name], value.ArrayDimension{})
+			seen[name] = append(seen[name], false)
+		}
+		if seen[name][n] {
+			c.warn("RDB$FIELD_DIMENSIONS: duplicate dimension %d of array field %s", n, name)
+			invalid[name] = true
+			return
+		}
+		dims[name][n] = value.ArrayDimension{Lower: int32(lower), Upper: int32(upper)}
+		seen[name][n] = true
+	})
+	for name, columns := range cols {
+		f, ok := types[name]
+		if !ok || invalid[name] || len(dims[name]) == 0 {
+			continue
+		}
+		complete := true
+		for i, ok := range seen[name] {
+			if !ok {
+				c.warn("RDB$FIELD_DIMENSIONS: dimension %d of array field %s is missing", i, name)
+				complete = false
+				break
+			}
+		}
+		if !complete {
+			continue
+		}
+		a := &value.ArrayType{Element: f, Dimensions: dims[name]}
+		for _, col := range columns {
+			col.Array = a
+		}
+	}
+}
+
+// arrayElementField converts the BLR type code in RDB$FIELDS to the
+// physical descriptor used inside an array.
+func arrayElementField(rec []byte, f map[string]value.Field) (value.Field, error) {
+	length := intField(rec, f["FIELD_LENGTH"])
+	typ := intField(rec, f["FIELD_TYPE"])
+	out := value.Field{Scale: int8(intField(rec, f["FIELD_SCALE"])), Length: uint16(max(length, 0))}
+	switch typ {
+	case 7:
+		out.DType = value.TypeShort
+	case 8:
+		out.DType = value.TypeLong
+	case 16:
+		out.DType = value.TypeInt64
+	case 10:
+		out.DType = value.TypeReal
+	case 27:
+		out.DType = value.TypeDouble
+	case 12:
+		out.DType = value.TypeDate
+	case 13:
+		out.DType = value.TypeTime
+	case 35:
+		out.DType = value.TypeTimestamp
+	case 14, 15:
+		out.DType = value.TypeText
+	case 37, 38:
+		out.DType = value.TypeVarying
+		out.Length += 2
+	case 23:
+		out.DType = value.TypeBoolean
+	case 24:
+		out.DType = value.TypeDec64
+	case 25:
+		out.DType = value.TypeDec128
+	case 26:
+		out.DType = value.TypeInt128
+	case 28:
+		out.DType = value.TypeTimeTZ
+	case 29:
+		out.DType = value.TypeTimestampTZ
+	default:
+		return out, fmt.Errorf("element type %d is not supported", typ)
+	}
+	if out.DType == value.TypeShort || out.DType == value.TypeLong || out.DType == value.TypeInt64 || out.DType == value.TypeInt128 {
+		out.SubType = int16(intField(rec, f["FIELD_SUB_TYPE"]))
+	}
+	if out.DType == value.TypeText || out.DType == value.TypeVarying {
+		charset, collation := intField(rec, f["CHARACTER_SET_ID"]), intField(rec, f["COLLATION_ID"])
+		out.SubType = int16((max(charset, 0) & 0xff) | (max(collation, 0) & 0xff << 8))
+	}
+	if length <= 0 {
+		return out, fmt.Errorf("element length is %d", length)
+	}
+	return out, nil
 }
 
 // setDefault finds the value the engine reads for this column in records
