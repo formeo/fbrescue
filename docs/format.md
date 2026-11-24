@@ -37,6 +37,10 @@ ODS 11, one per page range in ODS 13), not interpreted.
 |---|---|---|---|
 | page size | 0x10 u16 | 0x10 | 0x10 |
 | ODS version | 0x12 u16 | 0x12 | 0x12 |
+| OIT / OAT / next tx | 0x1C / 0x20 / 0x24 u32 | same | same |
+| flags | 0x2A u16 | 0x2A | 0x2A |
+| creation date, time | 0x2C, 0x30 (days since 1858-11-17, 1/10000 s); server local time | same | same, UTC |
+| next attachment | 0x34 u32 | 0x34 | 0x34 |
 | ODS minor | 0x3E u16 | 0x40 | 0x40 |
 | page buffers | 0x44 u32 | 0x44 | 0x44 |
 | OST | 0x4C u32 | 0x48 | 0x48 |
