@@ -63,7 +63,9 @@ build_array_helper() {
   local root=$CACHE/$1/opt/firebird lib=fbclient
   [[ $1 != 25 ]] || lib=fbembed
   cc -std=c99 -Wall -Wextra -Werror -I"$root/include" \
-    "$(dirname "$0")/arrays/arrays.c" -L"$root/lib" -l"$lib" -o "$root/bin/fbrescue-arrays"
+    "$(dirname "$0")/arrays/arrays.c" -L"$root/lib" \
+    -Wl,-rpath-link,"$root/lib" -Wl,-rpath-link,"$CACHE/compat" \
+    -l"$lib" -o "$root/bin/fbrescue-arrays"
 }
 
 # patch <file> <offset> <hex bytes> writes bytes into a file in place.
