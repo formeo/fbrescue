@@ -4,8 +4,9 @@
 # output for each as references. Tests also run the engines through fb.sh.
 #
 # Usage: tools/mkcorpus/mkcorpus.sh [output-dir]   (default: corpus)
-# Linux x86-64 only. Needs curl, tar and the libraries libtommath.so.1,
-# libncurses.so.6, libtinfo.so.6 (Ubuntu: apt-get install libtommath1 libncurses6).
+# Linux x86-64 only. Needs curl, tar, a C compiler and the libraries
+# libtommath.so.1, libncurses.so.6, libtinfo.so.6
+# (Ubuntu: apt-get install build-essential libtommath1 libncurses6).
 # Downloads are cached in $FB_CACHE (default ~/.cache/fbrescue/firebird).
 set -euo pipefail
 
@@ -26,7 +27,7 @@ compat_libs() {
   mkdir -p "$CACHE/compat"
   local want have
   for pair in libtommath.so.0:libtommath.so.1 libncurses.so.5:libncurses.so.6 libtinfo.so.5:libtinfo.so.6; do
-    want=${pair%%:*}; have=$(ldconfig -p | awk -v l="${pair##*:}" '$1 == l { print $NF; exit }')
+    want=${pair%%:*}; have=$(ldconfig -p | awk -v l="${pair##*:}" '$1 == l { path = $NF } END { print path }')
     [[ -n $have ]] || { echo "missing system library ${pair##*:}" >&2; exit 1; }
     ln -sf "$have" "$CACHE/compat/$want"
   done
@@ -56,6 +57,15 @@ fb() {
 
 create_db() { # create_db <version> <path> <dialect> [page size] [extra clause]
   echo "create database '$2' page_size ${4:-8192} ${5:-}; quit;" | fb "$1" isql -q -sql_dialect "$3"
+}
+
+build_array_helper() {
+  local root=$CACHE/$1/opt/firebird lib=fbclient
+  [[ $1 != 25 ]] || lib=fbembed
+  cc -std=c99 -Wall -Wextra -Werror -I"$root/include" \
+    "$(dirname "$0")/arrays/arrays.c" -L"$root/lib" \
+    -Wl,-rpath-link,"$root/lib" -Wl,-rpath-link,"$CACHE/compat" \
+    -l"$lib" -o "$root/bin/fbrescue-arrays"
 }
 
 # patch <file> <offset> <hex bytes> writes bytes into a file in place.
@@ -120,6 +130,16 @@ for v in 25 30 40 50; do
   create_db "$v" "$d/types.fdb" 3 8192 "default character set utf8"
   fb "$v" isql -q -ch UTF8 "$d/types.fdb" -i "$SQL/types.sql"
   [[ $v == 25 ]] || fb "$v" isql -q -ch UTF8 "$d/types.fdb" -i "$SQL/boolean.sql"
+
+  # Array columns: NULLs, integer edges, text, a partial slice and two
+  # dimensions. Firebird SQL has no array literals, so the API helper fills it.
+  create_db "$v" "$d/arrays.fdb" 3 8192 "default character set utf8"
+  fb "$v" isql -q -ch UTF8 "$d/arrays.fdb" -i "$SQL/arrays.sql"
+  build_array_helper "$v"
+  fb "$v" fbrescue-arrays fill "$d/arrays.fdb"
+  if [[ $v == 40 || $v == 50 ]]; then
+    fb "$v" isql -q -ch UTF8 "$d/arrays.fdb" -i "$SQL/arrays4.sql"
+  fi
 
   # Record layouts: format changes, long runs, fragments, rolled-back
   # changes, blobs on many pages, a descriptor larger than a page, and

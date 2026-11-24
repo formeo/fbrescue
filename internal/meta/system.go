@@ -12,10 +12,12 @@ import (
 // docs/format.md has the details and how they were verified.
 
 const (
-	relPages          = 0
-	relRelationFields = 5
-	relRelations      = 6
-	relFormats        = 8
+	relPages           = 0
+	relFields          = 2
+	relRelationFields  = 5
+	relRelations       = 6
+	relFormats         = 8
+	relFieldDimensions = 21
 )
 
 type sysField struct {
@@ -40,6 +42,16 @@ func sysFields(rel int, ods int) []sysField {
 	switch rel {
 	case relPages:
 		return []sysField{long("PAGE_NUMBER"), short("RELATION_ID"), long("PAGE_SEQUENCE"), short("PAGE_TYPE")}
+	case relFields:
+		return []sysField{name("FIELD_NAME"), name("QUERY_NAME"), blob("VALIDATION_BLR"), blob("VALIDATION_SOURCE"),
+			blob("COMPUTED_BLR"), blob("COMPUTED_SOURCE"), blob("DEFAULT_VALUE"), blob("DEFAULT_SOURCE"),
+			short("FIELD_LENGTH"), short("FIELD_SCALE"), short("FIELD_TYPE"), short("FIELD_SUB_TYPE"),
+			blob("MISSING_VALUE"), blob("MISSING_SOURCE"), blob("DESCRIPTION"), short("SYSTEM_FLAG"), blob("QUERY_HEADER"),
+			short("SEGMENT_LENGTH"), {"EDIT_STRING", value.TypeVarying, 127}, short("EXTERNAL_LENGTH"),
+			short("EXTERNAL_SCALE"), short("EXTERNAL_TYPE"), short("DIMENSIONS"), short("NULL_FLAG"),
+			short("CHARACTER_LENGTH"), short("COLLATION_ID"), short("CHARACTER_SET_ID"), short("FIELD_PRECISION")}
+	case relFieldDimensions:
+		return []sysField{name("FIELD_NAME"), short("DIMENSION"), long("LOWER_BOUND"), long("UPPER_BOUND")}
 	case relFormats:
 		return []sysField{short("RELATION_ID"), short("FORMAT"), blob("DESCRIPTOR")}
 	case relRelations:
@@ -62,6 +74,11 @@ func sysFields(rel int, ods int) []sysField {
 // the size of the null bitmap; the lists above may be a prefix.
 func sysTotalFields(rel, ods int) int {
 	switch rel {
+	case relFields:
+		if ods >= 12 {
+			return 30
+		}
+		return 28
 	case relRelations:
 		if ods >= 13 {
 			return 18

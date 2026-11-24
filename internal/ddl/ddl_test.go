@@ -27,6 +27,7 @@ var scripts = map[string]struct {
 	"layout": {[]string{"layout.sql"}, false}, "types": {[]string{"types.sql", "boolean.sql"}, true},
 	"fb4types": {[]string{"fb4types.sql"}, true}, "blobs": {[]string{"blobs.sql"}, true},
 	"versions": {[]string{"versions.sql"}, true}, "shop": {[]string{"shop.sql"}, true},
+	"arrays": {[]string{"arrays.sql", "arrays4.sql"}, true},
 }
 
 // TestLayoutMatchesFormats: the layout computed from DDL equals the record
@@ -69,6 +70,9 @@ func TestLayoutMatchesFormats(t *testing.T) {
 			}
 			for _, name := range sc.files {
 				if name == "boolean.sql" && db.Engine == "fb25" {
+					continue
+				}
+				if name == "arrays4.sql" && (db.Engine == "fb25" || db.Engine == "fb30") {
 					continue
 				}
 				b, err := os.ReadFile(filepath.Join("../../tools/mkcorpus/sql", name))
@@ -144,4 +148,41 @@ func compare(t *testing.T, what, script string, cat *meta.Catalog, all bool) int
 
 func desc(f value.Field) string {
 	return fmt.Sprintf("%s (type %d, length %d, scale %d, sub type %d, offset %d)", f.SQLType(), f.DType, f.Length, f.Scale, f.SubType, f.Offset)
+}
+
+func TestParseArrays(t *testing.T) {
+	tables, warnings, err := ddl.Parse(`
+		CREATE DOMAIN D_NUMBERS AS INTEGER[-2:1,3];
+		CREATE TABLE A (
+			ID INTEGER,
+			I INTEGER[4],
+			M INTEGER[0:1,2:4],
+			V VARCHAR(5)[3] CHARACTER SET UTF8,
+			D D_NUMBERS
+		);`)
+	if err != nil || len(warnings) != 0 || len(tables) != 1 {
+		t.Fatalf("Parse: tables %d, warnings %q, error %v", len(tables), warnings, err)
+	}
+	for _, c := range tables[0].Columns[1:] {
+		if c.Field.DType != value.TypeArray || c.Field.Length != 8 || c.Array == nil {
+			t.Fatalf("%s: physical field %+v, array %+v", c.Name, c.Field, c.Array)
+		}
+	}
+	wantTypes := []string{"INTEGER[4]", "INTEGER[0:1,2:4]", "VARCHAR(5)[3] CHARACTER SET UTF8", "INTEGER[-2:1,3]"}
+	for i, want := range wantTypes {
+		if got := tables[0].Columns[i+1].Array.SQLType(); got != want {
+			t.Errorf("column %d type %q, want %q", i+1, got, want)
+		}
+	}
+	if got := tables[0].Columns[2].Array.Dimensions; len(got) != 2 || got[0] != (value.ArrayDimension{Lower: 0, Upper: 1}) || got[1] != (value.ArrayDimension{Lower: 2, Upper: 4}) {
+		t.Errorf("multidimensional bounds: %+v", got)
+	}
+}
+
+func TestParseArrayRejectsInvalidBounds(t *testing.T) {
+	for _, decl := range []string{"INTEGER[0]", "INTEGER[2:1]", "INTEGER[1:2", "BLOB[2]"} {
+		if _, _, err := ddl.Parse("CREATE TABLE A (X " + decl + ");"); err == nil {
+			t.Errorf("%s: expected an error", decl)
+		}
+	}
 }

@@ -174,7 +174,7 @@ Data types (dtype): 1 CHAR, 3 VARCHAR (u16 length first), 8 SMALLINT, 9
 INTEGER, 19 BIGINT (with scale: NUMERIC/DECIMAL), 11 FLOAT, 12 DOUBLE, 14
 DATE (days since 1858-11-17), 15 TIME (1/10000 s), 16 TIMESTAMP (date,
 time), 17 BLOB (8-byte id; for text blobs the character set is in the
-scale byte), 21 BOOLEAN, and from Firebird 4 22/23 DECFLOAT(16/34), 24
+scale byte), 18 ARRAY (8-byte id), 21 BOOLEAN, and from Firebird 4 22/23 DECFLOAT(16/34), 24
 INT128 (also NUMERIC/DECIMAL(19..38)), 25 TIME WITH TIME ZONE, 26 TIMESTAMP
 WITH TIME ZONE (see below). CHAR in a multi-byte character set is padded
 with spaces to its length in bytes; the value is padded to its length in
@@ -184,7 +184,7 @@ Layout of a record (used by `--ddl`, which has only CREATE TABLE
 statements): the null bitmap, then the fields in field id order, each at
 the next multiple of its alignment — 1 for CHAR and BOOLEAN; 2 VARCHAR,
 SMALLINT; 4 INTEGER, FLOAT, DATE, TIME, TIME and TIMESTAMP WITH TIME ZONE;
-8 DOUBLE, TIMESTAMP, BLOB, BIGINT, DECFLOAT, INT128. Field ids follow the
+8 DOUBLE, TIMESTAMP, BLOB, ARRAY, BIGINT, DECFLOAT, INT128. Field ids follow the
 order columns were created in; a COMPUTED BY column has an id and a null
 bit but no bytes; a dropped column keeps its id. Types are stored as:
 NUMERIC(1-4) SMALLINT, NUMERIC(5-9) and DECIMAL(1-9) INTEGER, (10-18)
@@ -217,8 +217,9 @@ decoding is checked.
 ## System tables
 
 Their formats are not in RDB$FORMATS. fbrescue builds the ones it reads
-(RDB$PAGES, RDB$RELATIONS, RDB$RELATION_FIELDS, RDB$FORMATS) from the field
-lists in `internal/meta/system.go` with the engine's layout rule: null
+(RDB$PAGES, RDB$RELATIONS, RDB$RELATION_FIELDS, RDB$FORMATS, RDB$FIELDS,
+RDB$FIELD_DIMENSIONS) from the field lists in `internal/meta/system.go`
+with the engine's layout rule: null
 bitmap, then each field aligned for its type — CHAR 1, VARCHAR and
 SMALLINT 2, INTEGER 4, BLOB id 8. Names are CHAR(31) UNICODE_FSS before
 ODS 13, CHAR(63) UTF8 (252 bytes) from ODS 13 on. Verified by decoding
@@ -245,6 +246,27 @@ bytes; stream blobs are the bytes alone. Test: the BL table of the corpus
 (text in UTF8, WIN1251 and NONE, binary; levels 0, 1 and 2 up to 8 MB;
 stream blobs written with BLOB_APPEND on Firebird 5) in
 `TestExportRoundTrip` and `TestExportBlobContents`.
+
+## Arrays
+
+An array field holds the same 8-byte id as a stream blob. Its data starts
+with an `InternalArrayDesc`: version and dimension count (bytes 0 and 1),
+element length (u16 at 4), descriptor length (u16 at 6), total element count
+(u32 at 8) and full data length (u32 at 12). Each of the 24-byte dimension
+entries starts at 16 and contains a 12-byte element descriptor followed by
+inclusive lower and upper bounds (i32 at entry offsets 16 and 20). Only the
+first dimension's element descriptor is reliable; later ones can contain
+uninitialized bytes. Elements follow in storage order, with the last
+subscript changing fastest. A partially written array stores only its prefix;
+the unwritten tail reads as zero values, as it does through the engine.
+
+The SQL declaration comes from `RDB$RELATION_FIELDS.RDB$FIELD_SOURCE`, the
+element descriptor from `RDB$FIELDS`, and the bounds from
+`RDB$FIELD_DIMENSIONS`. JSON Lines writes nested arrays; CSV and SQL write
+compact JSON text. SQL has no general array literal, so restoring those
+strings requires Firebird's Array API. Tests: `TestParseArray`,
+`TestParseArrayDimensions`, `TestExportArrays` (including an API round trip
+on every engine) and `TestExportDamagedArrays`.
 
 ## Record versions and visibility
 

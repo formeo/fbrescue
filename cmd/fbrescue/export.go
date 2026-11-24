@@ -75,7 +75,7 @@ func runTables(a cliArgs, stdout, stderr io.Writer) int {
 			tj := tableJSON{ID: t.ID, Name: t.Name, Formats: len(t.Formats), Columns: []columnJSON{}}
 			for _, c := range t.Columns {
 				ok, why := export.Exported(c)
-				tj.Columns = append(tj.Columns, columnJSON{c.Name, c.Field.SQLType(), c.NotNull, ok, why})
+				tj.Columns = append(tj.Columns, columnJSON{c.Name, c.SQLType(), c.NotNull, ok, why})
 			}
 			out.Tables = append(out.Tables, tj)
 		}

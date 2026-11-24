@@ -47,6 +47,8 @@ func text(v any) string {
 		return x.(fmt.Stringer).String()
 	case value.Text:
 		return x.S
+	case value.Array:
+		return string(appendJSON(nil, x.Nested()))
 	case value.Octets:
 		return hex.EncodeToString(x)
 	case bool:
@@ -135,38 +137,52 @@ func (j *jsonlWriter) row(vals []any) error {
 	_ = j.w.WriteByte('{')
 	for i, v := range vals {
 		_, _ = j.w.Write(j.keys[i])
-		switch x := v.(type) {
-		case nil:
-			_, _ = j.w.WriteString("null")
-		case value.Decimal, value.BigDecimal, bool:
-			_, _ = j.w.WriteString(text(x))
-		case value.DecFloat:
-			if strings.ContainsAny(string(x), "IN") { // Infinity, NaN
-				b, _ := json.Marshal(string(x))
-				_, _ = j.w.Write(b)
-			} else {
-				_, _ = j.w.WriteString(string(x))
-			}
-		case float32:
-			j.number(float64(x), text(x))
-		case float64:
-			j.number(x, text(x))
-		default:
-			b, _ := json.Marshal(text(x))
-			_, _ = j.w.Write(b)
-		}
+		_, _ = j.w.Write(appendJSON(nil, v))
 	}
 	_, err := j.w.WriteString("}\n")
 	return err
 }
 
-func (j *jsonlWriter) number(f float64, s string) {
-	if math.IsNaN(f) || math.IsInf(f, 0) {
-		b, _ := json.Marshal(s)
-		_, _ = j.w.Write(b)
-		return
+// appendJSON preserves array nesting and the scalar number representation.
+func appendJSON(dst []byte, v any) []byte {
+	switch x := v.(type) {
+	case nil:
+		return append(dst, "null"...)
+	case value.Decimal, value.BigDecimal, bool:
+		return append(dst, text(x)...)
+	case value.DecFloat:
+		if strings.ContainsAny(string(x), "IN") { // Infinity, NaN
+			b, _ := json.Marshal(string(x))
+			return append(dst, b...)
+		}
+		return append(dst, string(x)...)
+	case float32:
+		if math.IsNaN(float64(x)) || math.IsInf(float64(x), 0) {
+			b, _ := json.Marshal(text(x))
+			return append(dst, b...)
+		}
+		return append(dst, text(x)...)
+	case float64:
+		if math.IsNaN(x) || math.IsInf(x, 0) {
+			b, _ := json.Marshal(text(x))
+			return append(dst, b...)
+		}
+		return append(dst, text(x)...)
+	case value.Array:
+		return appendJSON(dst, x.Nested())
+	case []any:
+		dst = append(dst, '[')
+		for i, v := range x {
+			if i > 0 {
+				dst = append(dst, ',')
+			}
+			dst = appendJSON(dst, v)
+		}
+		return append(dst, ']')
+	default:
+		b, _ := json.Marshal(text(x))
+		return append(dst, b...)
 	}
-	_, _ = j.w.WriteString(s)
 }
 
 func (j *jsonlWriter) flush() error { return nil }
@@ -220,6 +236,12 @@ func newSQL(w *bufio.Writer, t *meta.Table, cols []*meta.Column, blobs blobSink)
 		names[i] = quote(c.Name)
 	}
 	_, _ = fmt.Fprintf(w, "-- Rows of %s recovered by fbrescue. Load after schema.sql: isql -ch UTF8 -i <this file> <database>\n", t.Name)
+	for _, c := range cols {
+		if c.Array != nil {
+			_, _ = w.WriteString("-- Array values are flat JSON strings; restoring them requires Firebird's Array API, not isql.\n")
+			break
+		}
+	}
 	return &sqlWriter{w: w, prefix: "INSERT INTO " + quote(t.Name) + " (" + strings.Join(names, ", ") + ") VALUES (", cols: cols, blobs: blobs}, nil
 }
 
@@ -350,6 +372,8 @@ func literal(v any) string {
 		return "TIMESTAMP '" + text(x) + "'"
 	case value.Text:
 		return "'" + strings.ReplaceAll(x.S, "'", "''") + "'"
+	case value.Array:
+		return literal(value.Text{S: text(x)})
 	case value.Octets:
 		return "x'" + strings.ToUpper(hex.EncodeToString(x)) + "'"
 	case bool:

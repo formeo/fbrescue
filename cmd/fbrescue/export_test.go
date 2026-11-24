@@ -165,6 +165,268 @@ func TestExportRoundTrip(t *testing.T) {
 	}
 }
 
+const wantArray4JSONL = `{"ID":1,"I":null,"D16":null,"D34":null,"TT":null,"TS":null,"N":null}
+`
+
+const wantArrayJSONL = `{"ID":1,"I":[10,-20,0,2147483647],"M":[[1,2,3],[4,5,6]],"V":["one","two","three"],"B":[-9223372036854775808,9223372036854775807],"D":[[1,2,3],[4,5,6],[7,8,9],[10,11,12]]}
+{"ID":2,"I":[10,-20,0,0],"M":[[1,2,3],[4,5,6]],"V":null,"B":null,"D":null}
+{"ID":3,"I":[-2147483648,2147483647,0,1],"M":null,"V":["","a'b","Ж"],"B":[0,-1],"D":null}
+{"ID":4,"I":null,"M":null,"V":null,"B":null,"D":null}
+`
+
+// TestExportArrays checks all output formats and restores the JSON Lines
+// export through Firebird's Array API. isql has no general array literal, so
+// the usual SQL round trip cannot cover these columns.
+func TestExportArrays(t *testing.T) {
+	checked := 0
+	for _, db := range corpus.List(t) {
+		if db.Name != "arrays" {
+			continue
+		}
+		checked++
+		t.Run(db.Engine, func(t *testing.T) {
+			dir := t.TempDir()
+			export := func(format, database, out string) {
+				t.Helper()
+				var stdout, stderr bytes.Buffer
+				if code := run([]string{"export", "--format", format, "--out", out, database}, &stdout, &stderr); code != 0 {
+					t.Fatalf("export %s: exit %d\n%s%s", format, code, stdout.String(), stderr.String())
+				}
+			}
+			jsonDir, csvDir, sqlDir := filepath.Join(dir, "json"), filepath.Join(dir, "csv"), filepath.Join(dir, "sql")
+			export("jsonl", db.Path, jsonDir)
+			export("csv", db.Path, csvDir)
+			export("sql", db.Path, sqlDir)
+
+			raw, err := os.ReadFile(filepath.Join(jsonDir, "A.jsonl"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(raw) != wantArrayJSONL {
+				t.Fatalf("JSON Lines:\n%s", firstDiff(wantArrayJSONL, string(raw)))
+			}
+			fb4 := db.Engine == "fb40" || db.Engine == "fb50"
+			var raw4 []byte
+			if fb4 {
+				raw4, err = os.ReadFile(filepath.Join(jsonDir, "T4.jsonl"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				if string(raw4) != wantArray4JSONL {
+					t.Fatalf("Firebird 4 array types:\n%s", firstDiff(wantArray4JSONL, string(raw4)))
+				}
+			}
+			schema, err := os.ReadFile(filepath.Join(jsonDir, "schema.sql"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, decl := range []string{`"I" INTEGER[4]`, `"M" INTEGER[0:1,2:4]`, `"V" VARCHAR(5)[3] CHARACTER SET UTF8`, `"B" BIGINT[2]`, `"D" INTEGER[-2:1,3]`} {
+				if !bytes.Contains(schema, []byte(decl)) {
+					t.Errorf("schema.sql does not contain %q", decl)
+				}
+			}
+			if fb4 {
+				for _, decl := range []string{`"I" INT128[2]`, `"D16" DECFLOAT(16)[2]`, `"D34" DECFLOAT(34)[2]`, `"TT" TIME WITH TIME ZONE[2]`, `"TS" TIMESTAMP WITH TIME ZONE[2]`} {
+					if !bytes.Contains(schema, []byte(decl)) {
+						t.Errorf("schema.sql does not contain %q", decl)
+					}
+				}
+			}
+
+			csvRaw, err := os.ReadFile(filepath.Join(csvDir, "A.csv"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			recs, err := csv.NewReader(bytes.NewReader(csvRaw)).ReadAll()
+			if err != nil || len(recs) != 5 {
+				t.Fatalf("CSV: %v, %d records", err, len(recs))
+			}
+			cols := map[string]int{}
+			for i, name := range recs[0] {
+				cols[name] = i
+			}
+			for col, want := range map[string]string{
+				"I": "[10,-20,0,2147483647]", "M": "[[1,2,3],[4,5,6]]",
+				"V": `["one","two","three"]`, "B": "[-9223372036854775808,9223372036854775807]",
+				"D": "[[1,2,3],[4,5,6],[7,8,9],[10,11,12]]",
+			} {
+				if got := recs[1][cols[col]]; got != want {
+					t.Errorf("CSV row 1 %s = %q, want %q", col, got, want)
+				}
+			}
+			if got := recs[2][cols["I"]]; got != "[10,-20,0,0]" {
+				t.Errorf("CSV partial array = %q", got)
+			}
+			for _, col := range []string{"I", "M", "V", "B", "D"} {
+				if got := recs[4][cols[col]]; got != "" {
+					t.Errorf("CSV NULL %s = %q", col, got)
+				}
+			}
+
+			sqlRaw, err := os.ReadFile(filepath.Join(sqlDir, "A.sql"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, want := range []string{
+				"restoring them requires Firebird's Array API, not isql",
+				`'[10,-20,0,2147483647]'`, `'[[1,2,3],[4,5,6]]'`,
+				`'["","a''b","Ж"]'`,
+			} {
+				if !bytes.Contains(sqlRaw, []byte(want)) {
+					t.Errorf("SQL does not contain %q", want)
+				}
+			}
+
+			newDB := filepath.Join(dir, "new.fdb")
+			fbTool(t, db.Engine, "create database '"+newDB+"' default character set utf8; quit;", "isql", "-q")
+			fbTool(t, db.Engine, "", "isql", "-q", "-b", "-ch", "UTF8", "-i", filepath.Join(jsonDir, "schema.sql"), newDB)
+			if fb4 {
+				fbTool(t, db.Engine, "insert into \"T4\" (\"ID\") values (1); commit; quit;", "isql", "-q", newDB)
+			}
+			fbTool(t, db.Engine, arrayRestoreCommands(t, raw), "fbrescue-arrays", "restore", newDB)
+			restoredDir := filepath.Join(dir, "restored")
+			export("jsonl", newDB, restoredDir)
+			got, err := os.ReadFile(filepath.Join(restoredDir, "A.jsonl"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Equal(got, raw) {
+				t.Errorf("round trip differs:\n%s", firstDiff(string(raw), string(got)))
+			}
+			if fb4 {
+				got4, err := os.ReadFile(filepath.Join(restoredDir, "T4.jsonl"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				if !bytes.Equal(got4, raw4) {
+					t.Errorf("Firebird 4 array round trip differs:\n%s", firstDiff(string(raw4), string(got4)))
+				}
+			}
+		})
+	}
+	if checked != 4 {
+		t.Errorf("checked %d array databases, want one from each of four engines", checked)
+	}
+}
+
+func arrayRestoreCommands(t *testing.T, raw []byte) string {
+	t.Helper()
+	var out strings.Builder
+	var flatten func(any, *[]any)
+	flatten = func(v any, values *[]any) {
+		if a, ok := v.([]any); ok {
+			for _, x := range a {
+				flatten(x, values)
+			}
+			return
+		}
+		*values = append(*values, v)
+	}
+	for _, line := range bytes.Split(bytes.TrimSpace(raw), []byte{'\n'}) {
+		dec := json.NewDecoder(bytes.NewReader(line))
+		dec.UseNumber()
+		var row map[string]any
+		if err := dec.Decode(&row); err != nil {
+			t.Fatal(err)
+		}
+		id, ok := row["ID"].(json.Number)
+		if !ok {
+			t.Fatalf("row ID is %#v", row["ID"])
+		}
+		fmt.Fprintf(&out, "ROW %s\n", id)
+		for _, col := range []string{"I", "M", "V", "B", "D"} {
+			if row[col] == nil {
+				continue
+			}
+			var values []any
+			flatten(row[col], &values)
+			fmt.Fprintf(&out, "PUT %s %s", id, col)
+			for _, v := range values {
+				switch x := v.(type) {
+				case json.Number:
+					fmt.Fprintf(&out, " %s", x)
+				case string:
+					if x == "" {
+						out.WriteString(" ~")
+					} else {
+						fmt.Fprintf(&out, " %s", hex.EncodeToString([]byte(x)))
+					}
+				default:
+					t.Fatalf("array element is %#v", v)
+				}
+			}
+			out.WriteByte('\n')
+		}
+	}
+	return out.String()
+}
+
+// TestExportDamagedArrays makes descriptor damage visible in both the output
+// and _errors.jsonl. Only a disposable copy is patched, never the corpus.
+func TestExportDamagedArrays(t *testing.T) {
+	descriptor, err := hex.DecodeString("01010100040028000400000010000000090004000000000000000000010000000100000004000000")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, db := range corpus.List(t) {
+		if db.Name != "arrays" {
+			continue
+		}
+		t.Run(db.Engine, func(t *testing.T) {
+			damaged := copyTo(t, db.Path, t.TempDir())
+			raw, err := os.ReadFile(damaged)
+			if err != nil {
+				t.Fatal(err)
+			}
+			hits := 0
+			for at := 0; at < len(raw); {
+				i := bytes.Index(raw[at:], descriptor)
+				if i < 0 {
+					break
+				}
+				at += i
+				raw[at] = 2 // unsupported InternalArrayDesc version
+				at += len(descriptor)
+				hits++
+			}
+			if hits == 0 {
+				t.Fatal("no array descriptors found")
+			}
+			if err := os.WriteFile(damaged, raw, 0o644); err != nil {
+				t.Fatal(err)
+			}
+			dir := t.TempDir()
+			var stdout, stderr bytes.Buffer
+			if code := run([]string{"export", "--format", "jsonl", "--out", dir, damaged}, &stdout, &stderr); code != 2 {
+				t.Fatalf("export: exit %d, want 2\n%s%s", code, stdout.String(), stderr.String())
+			}
+			errorsRaw, err := os.ReadFile(filepath.Join(dir, "_errors.jsonl"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := strings.Count(string(errorsRaw), `"column":"I"`); got != 3 {
+				t.Errorf("logged %d damaged arrays, want 3:\n%s", got, errorsRaw)
+			}
+			if !bytes.Contains(errorsRaw, []byte("array descriptor version 2 is not supported")) {
+				t.Errorf("error log does not explain the damage:\n%s", errorsRaw)
+			}
+			rows, err := os.ReadFile(filepath.Join(dir, "A.jsonl"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			for i, line := range bytes.Split(bytes.TrimSpace(rows), []byte{'\n'}) {
+				var row map[string]any
+				if err := json.Unmarshal(line, &row); err != nil {
+					t.Fatal(err)
+				}
+				if i < 3 && row["I"] != nil {
+					t.Errorf("row %d: damaged array was not written as NULL: %s", i+1, line)
+				}
+			}
+		})
+	}
+}
+
 func firstDiff(a, b string) string {
 	al, bl := strings.Split(a, "\n"), strings.Split(b, "\n")
 	for i := 0; i < len(al) && i < len(bl); i++ {
