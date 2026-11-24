@@ -37,8 +37,8 @@ faq:
   - q: What does fbrescue not recover?
     a: >-
       Indexes, triggers, stored procedures, views, users, generator values and constraints: it exports table
-      definitions (schema.sql) and rows. Array columns are not exported yet. Rows on pages that are zeroed
-      or cut off from the file are lost; every row it could not read is listed in `_errors.jsonl`.
+      definitions (schema.sql) and rows. Rows on pages that are zeroed or cut off from the file are lost;
+      every row it could not read is listed in `_errors.jsonl`.
   - q: Can it recover deleted or overwritten rows?
     a: >-
       Often, if the old record versions are still on disk (not yet garbage-collected): `--include-deleted`

@@ -38,9 +38,8 @@ faq:
   - q: O que o fbrescue não recupera?
     a: >-
       Índices, triggers, stored procedures, views, usuários, valores de generators e constraints: ele
-      exporta as definições das tabelas (schema.sql) e as linhas. Colunas do tipo array ainda não são
-      exportadas. Linhas em páginas zeradas ou cortadas do arquivo se perdem; cada linha que ele não
-      conseguiu ler é listada em `_errors.jsonl`.
+      exporta as definições das tabelas (schema.sql) e as linhas. Linhas em páginas zeradas ou cortadas
+      do arquivo se perdem; cada linha que ele não conseguiu ler é listada em `_errors.jsonl`.
   - q: Dá para recuperar linhas apagadas ou sobrescritas?
     a: >-
       Muitas vezes sim, se as versões antigas dos registros ainda estão no disco (antes da coleta de lixo):

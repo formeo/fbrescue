@@ -9,7 +9,7 @@ Open-source Firebird recovery tool: read-only data recovery for Firebird 2.5–5
 
 `fbrescue` reads `.fdb` / `.gdb` files directly, without the Firebird engine, and gets data out of databases that `gbak` cannot back up. **It never modifies the source file.**
 
-> **Status: v0.6.** `info` and `scan` analyze a database; `tables` and `export` get the schema and the data out without the engine — from intact databases, and from damaged ones as far as the pages allow ([recovery rate](#recovery-rate)); `page` shows a single page; `report` makes a diagnostic report without data. Not exported yet: arrays — reported, never silently dropped. On a damaged database, work on a copy and try `gfix` and `gbak` first: they are the engine's own tools.
+> **Status: v0.6.** `info` and `scan` analyze a database; `tables` and `export` get the schema and the data out without the engine — from intact databases, and from damaged ones as far as the pages allow ([recovery rate](#recovery-rate)); `page` shows a single page; `report` makes a diagnostic report without data. On a damaged database, work on a copy and try `gfix` and `gbak` first: they are the engine's own tools.
 
 ## When to use it
 
@@ -74,9 +74,11 @@ Wrote rescued: schema.sql and 2 sql files
 
 All commands take `--json`. A single static binary for Windows, Linux and macOS: no fbclient, no cgo. Multi-file databases are supported: secondary files are looked up next to the main file first. A damaged header page is not fatal for `info` and `scan`: the page size is detected from the other pages.
 
-What export handles: every column type of Firebird 2.5–5.0 except arrays — BLOBs of every level, segmented and stream; INT128, DECFLOAT, TIME/TIMESTAMP WITH TIME ZONE with region zones; text in UTF8, UNICODE_FSS and the single-byte character sets (WIN125x, KOI8R/U, ISO8859_x, DOSxxx, CYRL and NEXT); tables altered many times (each row is read with the format it was written with, columns added later get the default the engine would show); records larger than a page; the record encodings of Firebird 2.5 to 5.0, including 48-bit transaction numbers on Firebird 4+ with the correct transaction state. CSV keeps NULL (empty field) apart from an empty string (`""`). Each row is exported as SELECT would see it after all transactions finished: the newest committed version, read through the chain of older versions, including versions stored as differences. In tests a 140 MB database exports to CSV in under a second.
+What export handles: every column type of Firebird 2.5–5.0 — arrays; BLOBs of every level, segmented and stream; INT128, DECFLOAT, TIME/TIMESTAMP WITH TIME ZONE with region zones; text in UTF8, UNICODE_FSS and the single-byte character sets (WIN125x, KOI8R/U, ISO8859_x, DOSxxx, CYRL and NEXT); tables altered many times (each row is read with the format it was written with, columns added later get the default the engine would show); records larger than a page; the record encodings of Firebird 2.5 to 5.0, including 48-bit transaction numbers on Firebird 4+ with the correct transaction state. CSV keeps NULL (empty field) apart from an empty string (`""`). Each row is exported as SELECT would see it after all transactions finished: the newest committed version, read through the chain of older versions, including versions stored as differences. In tests a 140 MB database exports to CSV in under a second.
 
 BLOBs in SQL exports: values up to 1 MB are written inline as joined literals; larger ones go to `<table>.blobs/<row>.<column>.txt|bin`, with NULL and a comment naming the file in the INSERT. CSV and JSON Lines always hold the whole value. Firebird 2.5's isql reads statements of at most 64 KB, so SQL files with large inline values load only with isql 3.0 or later.
+
+Arrays are nested values in JSON Lines (`[[1,2,3],[4,5,6]]`) and compact JSON text in CSV and SQL. A partially written array is completed with zero values, as the engine reads it; NULL stays NULL. Firebird has no separate empty value for a fixed-size array. SQL array strings preserve the data for an API-based loader, but `isql` cannot assign them to array columns.
 
 ## Damaged databases
 
