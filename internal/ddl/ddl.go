@@ -28,6 +28,7 @@ type Table struct {
 type Column struct {
 	Name     string
 	Field    value.Field
+	Array    *value.ArrayType
 	NotNull  bool
 	Computed bool
 }
@@ -54,6 +55,7 @@ func (t *Table) Fields() []value.Field {
 
 type domain struct {
 	f       value.Field
+	array   *value.ArrayType
 	cs      bool // character set given
 	notNull bool
 }
@@ -158,12 +160,12 @@ func tokenize(s string) ([]token, error) {
 			}
 			out = append(out, token{s: strings.ToUpper(s[i:j])})
 			i = j
-		case c == '(' || c == ')' || c == ',' || c == ';':
+		case c == '(' || c == ')' || c == '[' || c == ']' || c == ':' || c == ',' || c == ';':
 			out = append(out, token{s: string(c)})
 			i++
 		default: // other punctuation, in runs: ^, ||, !! ...
 			j := i
-			for j < len(s) && !isWord(s[j]) && !strings.ContainsRune(" \t\r\n()',;\"", rune(s[j])) {
+			for j < len(s) && !isWord(s[j]) && !strings.ContainsRune(" \t\r\n()[]:,;'\"", rune(s[j])) {
 				j++
 			}
 			out = append(out, token{s: s[i:j]})
@@ -294,7 +296,24 @@ func (p *parser) createDomain(name token, rest []token) error {
 	if err != nil {
 		return fmt.Errorf("domain %s: %w", name.s, err)
 	}
-	p.domains[name.s] = domain{f, cs, notNull(rest[n:])}
+	dims, n, err := arrayDimensions(rest, n)
+	if err != nil {
+		return fmt.Errorf("domain %s: %w", name.s, err)
+	}
+	if dims != nil {
+		f, cs, n, err = arrayCharset(rest, n, f, cs)
+		if err != nil {
+			return fmt.Errorf("domain %s: %w", name.s, err)
+		}
+	}
+	d := domain{f: f, cs: cs, notNull: notNull(rest[n:])}
+	if dims != nil {
+		if _, _, err := makeArray(f, dims); err != nil {
+			return fmt.Errorf("domain %s: %w", name.s, err)
+		}
+		d.array = &value.ArrayType{Element: f, Dimensions: dims}
+	}
+	p.domains[name.s] = d
 	return nil
 }
 
@@ -318,13 +337,35 @@ func (p *parser) element(t *Table, el []token) error {
 		if !d.cs {
 			col.Field = withCharset(col.Field, p.defaultCS)
 		}
+		if d.array != nil {
+			a := *d.array
+			a.Element = col.Field
+			col.Array = &a
+			col.Field = value.Field{DType: value.TypeArray, Length: 8}
+		}
 	} else {
 		f, cs, n, err := p.dataType(rest)
 		if err != nil {
 			return fmt.Errorf("column %s: %w", col.Name, err)
 		}
+		dims, n, err := arrayDimensions(rest, n)
+		if err != nil {
+			return fmt.Errorf("column %s: %w", col.Name, err)
+		}
+		if dims != nil {
+			f, cs, n, err = arrayCharset(rest, n, f, cs)
+			if err != nil {
+				return fmt.Errorf("column %s: %w", col.Name, err)
+			}
+		}
 		if !cs {
 			f = withCharset(f, p.defaultCS)
+		}
+		if dims != nil {
+			f, col.Array, err = makeArray(f, dims)
+			if err != nil {
+				return fmt.Errorf("column %s: %w", col.Name, err)
+			}
 		}
 		col.Field, col.NotNull = f, notNull(rest[n:])
 	}
@@ -570,6 +611,83 @@ func (p *parser) dataType(toks []token) (value.Field, bool, int, error) {
 	return f, false, n, nil
 }
 
+// arrayDimensions parses [upper] or [lower:upper,...] after a scalar type.
+func arrayDimensions(toks []token, at int) ([]value.ArrayDimension, int, error) {
+	if at >= len(toks) || toks[at].s != "[" {
+		return nil, at, nil
+	}
+	var dims []value.ArrayDimension
+	for i := at + 1; ; {
+		first, next, err := arrayBound(toks, i)
+		if err != nil {
+			return nil, i, err
+		}
+		d := value.ArrayDimension{Lower: 1, Upper: first}
+		i = next
+		if i < len(toks) && toks[i].s == ":" {
+			d.Lower = first
+			d.Upper, i, err = arrayBound(toks, i+1)
+			if err != nil {
+				return nil, i, err
+			}
+		}
+		if d.Upper < d.Lower {
+			return nil, i, fmt.Errorf("invalid array bounds %d:%d", d.Lower, d.Upper)
+		}
+		dims = append(dims, d)
+		if len(dims) > 16 {
+			return nil, i, fmt.Errorf("array has more than 16 dimensions")
+		}
+		if i >= len(toks) {
+			return nil, i, fmt.Errorf("array dimensions do not close")
+		}
+		switch toks[i].s {
+		case ",":
+			i++
+		case "]":
+			return dims, i + 1, nil
+		default:
+			return nil, i, fmt.Errorf("expected comma or ], found %q", toks[i].s)
+		}
+	}
+}
+
+// arrayCharset parses CHARACTER SET after array dimensions, where Firebird
+// requires it in declarations such as VARCHAR(5)[3] CHARACTER SET UTF8.
+func arrayCharset(toks []token, at int, f value.Field, hasCS bool) (value.Field, bool, int, error) {
+	if at+2 >= len(toks) || !toks[at].is("CHARACTER") || !toks[at+1].is("SET") {
+		return f, hasCS, at, nil
+	}
+	cs, ok := value.CharsetByName(toks[at+2].s)
+	if !ok {
+		return f, hasCS, at, fmt.Errorf("unknown character set %s", toks[at+2].s)
+	}
+	return withCharset(f, cs), true, at + 3, nil
+}
+
+func arrayBound(toks []token, at int) (int32, int, error) {
+	sign := ""
+	if at < len(toks) && (toks[at].s == "-" || toks[at].s == "+") {
+		sign = toks[at].s
+		at++
+	}
+	if at >= len(toks) {
+		return 0, at, fmt.Errorf("missing array bound")
+	}
+	n, err := strconv.ParseInt(sign+toks[at].s, 10, 32)
+	if err != nil {
+		return 0, at, fmt.Errorf("expected an array bound, found %q", toks[at].s)
+	}
+	return int32(n), at + 1, nil
+}
+
+func makeArray(element value.Field, dims []value.ArrayDimension) (value.Field, *value.ArrayType, error) {
+	if !element.Supported() || element.DType == value.TypeArray || element.DType == value.TypeBlob {
+		return value.Field{}, nil, fmt.Errorf("%s cannot be an array element", element.SQLType())
+	}
+	return value.Field{DType: value.TypeArray, Length: 8}, &value.ArrayType{Element: element, Dimensions: dims}, nil
+}
+
 // parens returns the tokens inside the parentheses that toks starts with.
 func parens(toks []token) ([]token, int, error) {
 	depth := 0
@@ -591,7 +709,7 @@ func parens(toks []token) ([]token, int, error) {
 // splitTop splits at commas outside parentheses.
 func splitTop(toks []token) [][]token {
 	var out [][]token
-	depth, start := 0, 0
+	depth, brackets, start := 0, 0, 0
 	for i, t := range toks {
 		switch {
 		case t.quoted:
@@ -599,7 +717,11 @@ func splitTop(toks []token) [][]token {
 			depth++
 		case t.s == ")":
 			depth--
-		case t.s == "," && depth == 0:
+		case t.s == "[":
+			brackets++
+		case t.s == "]":
+			brackets--
+		case t.s == "," && depth == 0 && brackets == 0:
 			out = append(out, toks[start:i])
 			start = i + 1
 		}
